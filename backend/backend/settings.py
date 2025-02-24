@@ -58,6 +58,8 @@ ASGI_APPLICATION = "backend.asgi.application"
 
 ROOT_URLCONF = 'backend.urls'
 
+APPEND_SLASH=False
+
 TEMPLATES = [
     {
         'BACKEND': 'django.template.backends.django.DjangoTemplates',
