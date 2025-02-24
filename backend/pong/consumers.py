@@ -12,6 +12,14 @@ class PongConsumer(AsyncWebsocketConsumer):
         # Add every connecting client to a common lobby group
         await self.channel_layer.group_add("lobby", self.channel_name)
         print(f"WebSocket connected: {self.channel_name}")
+        await self.send(text_data=json.dumps({
+            "type": "waiting_list",
+            "waiting_list": [
+                {"nickname": p["nickname"], "rounds": p["rounds"]}
+                for p in waiting_players
+            ]
+        }))
+        
 
     async def disconnect(self, close_code):
         global waiting_players, active_games
@@ -115,13 +123,15 @@ class PongConsumer(AsyncWebsocketConsumer):
     async def broadcast_waiting_list(self):
         # Build a simplified waiting list (nickname and rounds only)
         waiting_list = [{"nickname": p["nickname"], "rounds": p["rounds"]} for p in waiting_players]
+        print(f"Broadcasting waiting list: {waiting_list}")
         await self.channel_layer.group_send("lobby", {
             "type": "waiting_list_update",
             "waiting_list": waiting_list
         })
 
     async def waiting_list_update(self, event):
-        waiting_list = event.get("waiting_list")
+        waiting_list = event.get("waiting_list", [])
+        print(f"Sending waiting list update: {waiting_list}")
         await self.send(text_data=json.dumps({
             "type": "waiting_list",
             "waiting_list": waiting_list
