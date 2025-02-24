@@ -1,18 +1,40 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pong Game</title>
-    <link rel="stylesheet" href="styles.css">
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pong.io - Menu</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container text-center mt-5">
-        <h1>Pong Game</h1>
-        <button id="testButton" class="btn btn-primary">Test API</button>
-        <p id="response"></p>
+  <div id="app">
+    <!-- Language Selection Page -->
+    <div id="language-page" class="page active">
+      <h2>Select Language</h2>
+      <select id="language-selector" class="button">
+        <option value="en">English</option>
+        <option value="es">Español</option>
+        <option value="fr">Français</option>
+      </select>
+      <button onclick="navigateTo('game-page')" class="button">Next</button>
     </div>
-    <script src="main.js"></script>
+
+    <!-- Game Start Page -->
+    <div id="game-page" class="page">
+      <h2 id="enter-name">Enter Your Nickname</h2>
+      <input type="text" id="nickname" class="nickname-input" placeholder="Enter a cool name">
+      <button id="start-game" class="button hidden">Start Game</button>
+      <button onclick="navigateTo('leaderboard-page')" class="button secondary">Leaderboard</button>
+      <h3 id="game-message" class="message hidden"></h3>
+    </div>
+
+    <!-- Leaderboard Page -->
+    <div id="leaderboard-page" class="page">
+      <h2>Leaderboard</h2>
+      <ul id="leaderboard" class="leaderboard-list"></ul>
+      <button onclick="navigateTo('game-page')" class="button secondary">Back</button>
+    </div>
+  </div>
+  <script src="main.js"></script>
 </body>
 </html>
