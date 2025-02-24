@@ -23,10 +23,12 @@
       <button onclick="navigateTo('game-page')" class="button">Next</button>
     </div>
 
-    <!-- Game Start Page (Nickname Entry) -->
+    <!-- Game Start Page (Nickname & Round Selection) -->
     <div id="game-page" class="page">
       <h2 id="enter-name">Enter Your Nickname</h2>
       <input type="text" id="nickname" class="nickname-input" placeholder="Enter a cool name">
+      <!-- Input for round amount -->
+      <input type="number" id="rounds-input" class="rounds-input" placeholder="Enter rounds" value="3" min="1">
 
       <!-- Join Game Button with two lines and arrow icons -->
       <div class="queue-wrapper">
@@ -38,17 +40,31 @@
         <i id="nextMode" class="fa fa-caret-right" style="visibility: visible;"></i>
       </div>
 
+      <!-- Waiting Players Section -->
+      <div id="waiting-players-container">
+        <h3>Currently Waiting Players</h3>
+        <ul id="waiting-players-list"></ul>
+      </div>
+
       <button onclick="navigateTo('leaderboard-page')" class="button secondary">Leaderboard</button>
     </div>
 
     <!-- Pong Game Page -->
     <div id="pong-page" class="page">
-      <div id="game-info">
-        <span id="player-name"></span> | Score: <span id="player-score">0</span>
+      <!-- Game Overlay for Fullscreen Info -->
+      <div id="game-overlay">
+        <div id="overlay-player-name"></div>
+        <div id="overlay-score"></div>
       </div>
+      
+      <!-- Mini info display for when game is minimized -->
+      <div id="game-info" class="game-info">
+        <span id="player-name"></span> | Rounds: <span id="player-rounds">0</span> / <span id="target-rounds">0</span>
+      </div>
+      
       <canvas id="pong-canvas"></canvas>
-      <button id="end-game" class="button secondary hidden">End Game</button>
-      <!-- Hidden debug button to force join (for testing) -->
+      <button id="end-game" class="button secondary hidden">Leave Game</button>
+      <!-- Hidden debug button for testing -->
       <button id="debug-join" class="button debug hidden">DEBUG JOIN</button>
       <h3 id="pong-status" class="message">Waiting for an opponent...</h3>
     </div>

@@ -73,8 +73,8 @@ h2 {
     pointer-events: none;
 }
 
-/* Nickname Input */
-.nickname-input {
+/* Nickname & Rounds Input */
+.nickname-input, .rounds-input {
     width: 80%;
     display: block;
     margin: 0 auto 15px;
@@ -88,10 +88,10 @@ h2 {
     outline: none;
     transition: border 0.3s ease-in-out;
 }
-.nickname-input::placeholder {
+.nickname-input::placeholder, .rounds-input::placeholder {
     color: rgba(255, 255, 255, 0.5);
 }
-.nickname-input:focus {
+.nickname-input:focus, .rounds-input:focus {
     border: 2px solid #00d4ff;
 }
 
@@ -145,6 +145,8 @@ h2 {
     height: 500px;
 }
 
+
+
 /* CRT Zoom Animation */
 @keyframes crtZoom {
   0% {
@@ -163,8 +165,35 @@ h2 {
   animation: crtZoom 1s ease-out;
 }
 
+/* Waiting Players Section */
+#waiting-players-container {
+    margin: 15px 0;
+    background: rgba(0, 0, 0, 0.3);
+    padding: 10px;
+    border-radius: 10px;
+}
+#waiting-players-container h3 {
+    margin: 0 0 5px;
+    font-size: 16px;
+}
+#waiting-players-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    font-size: 14px;
+    max-height: 100px;
+    overflow-y: auto;
+    text-align: left;
+}
+#waiting-players-list li {
+    margin: 2px 0;
+    color: #fff;
+}
+
+
 /* Fade-in Animation */
 @keyframes fadeIn {
     from { opacity: 0; transform: scale(0.95); }
     to { opacity: 1; transform: scale(1); }
 }
+

@@ -1,52 +1,58 @@
 document.addEventListener("DOMContentLoaded", () => {
     const languageSelector = document.getElementById("language-selector");
     const nicknameInput = document.getElementById("nickname");
+    const roundsInput = document.getElementById("rounds-input");
     const startGameButton = document.getElementById("start-game");
     const leaderboardList = document.getElementById("leaderboard");
     const debugJoinButton = document.getElementById("debug-join");
-    const playerNameDisplay = document.getElementById("player-name");
-    const playerScoreDisplay = document.getElementById("player-score");
+    const playerNameDisplay = document.getElementById("overlay-player-name"); // overlay element
+    const overlayScoreDisplay = document.getElementById("overlay-score"); // overlay element
     const endGameButton = document.getElementById("end-game");
+    const waitingPlayersList = document.getElementById("waiting-players-list");
+    const pongCanvas = document.getElementById("pong-canvas");
+    const gameInfo = document.getElementById("game-info");
 
-    let currentScore = 0;
+    let roundsPlayed = 0;
+    let targetRounds = 3;
     let gameLoopId;
     let ws;
-    let gameToken = null; // token to secure game-end API call
+    let gameToken = null;
     let nicknameGlobal = "";
     let isMultiplayer = false;
     let remotePaddleY = 0;
+    let gameOverHandled = false;
+    let isFullscreen = false;
 
-    // Default page: language selection
     navigateTo("language-page");
 
-    // Translations and status messages
     const translations = {
         "en": { 
             enterName: "Enter Your Nickname", 
             waitingQueue: "Waiting in queue...", 
             waitingOpponent: "Waiting for an opponent...", 
-            aiMode: "Playing with AI" 
+            aiMode: "Playing with AI",
+            minimizedWarning: "Game is minimized. Click to enlarge!" 
         },
         "es": { 
             enterName: "Ingrese su Apodo", 
             waitingQueue: "Esperando en cola...", 
             waitingOpponent: "Esperando a un oponente...", 
-            aiMode: "Jugando con IA" 
+            aiMode: "Jugando con IA",
+            minimizedWarning: "Juego minimizado. ¡Haz clic para agrandar!" 
         },
         "fr": { 
             enterName: "Entrez votre pseudo", 
             waitingQueue: "En attente dans la file...", 
             waitingOpponent: "En attente d'un adversaire...", 
-            aiMode: "Jouer contre IA" 
+            aiMode: "Jouer contre IA",
+            minimizedWarning: "Jeu minimisé. Cliquez pour agrandir!" 
         }
     };
 
-    // Handle language change
     languageSelector.addEventListener("change", () => {
         document.getElementById("enter-name").innerText = translations[languageSelector.value].enterName;
     });
 
-    // Fade-in effect for the "Join Game" button when typing nickname
     nicknameInput.addEventListener("input", () => {
         if (nicknameInput.value.trim().length > 0) {
             startGameButton.classList.remove("hidden");
@@ -55,17 +61,13 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     });
 
-    // Define available game modes (3 modes)
     const gameModes = ["Classic with queue", "Classic with AI", "Unimplemented"];
     let currentGameModeIndex = 0;
-
-    // Function to update the gamemode indicator text
     function updateGameModeIndicator() {
       document.querySelector(".game-mode-indicator").innerText = gameModes[currentGameModeIndex];
     }
     updateGameModeIndicator();
 
-    // Arrow buttons to cycle game modes
     document.getElementById("prevMode").addEventListener("click", () => {
       currentGameModeIndex = (currentGameModeIndex - 1 + gameModes.length) % gameModes.length;
       updateGameModeIndicator();
@@ -75,7 +77,17 @@ document.addEventListener("DOMContentLoaded", () => {
       updateGameModeIndicator();
     });
 
-    // Validate and start game based on selected mode
+    // Create minimized warning element
+    const minimizedWarning = document.createElement("div");
+    minimizedWarning.id = "minimized-warning";
+    minimizedWarning.className = "minimized-warning hidden";
+    document.getElementById("pong-page").appendChild(minimizedWarning);
+
+    function updateMinimizedWarning() {
+        const currentLang = languageSelector.value;
+        minimizedWarning.innerText = translations[currentLang].minimizedWarning;
+    }
+
     startGameButton.addEventListener("click", async () => {
         const nickname = nicknameInput.value.trim();
         if (!nickname) {
@@ -84,13 +96,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         const validNickname = /^[A-Za-z]{1,16}$/;
         if (!validNickname.test(nickname)) {
-            alert("this nickname is too cool to be used here!");
+            alert("This nickname is too cool to be used here!");
             return;
         }
         nicknameGlobal = nickname;
         playerNameDisplay.innerText = nickname;
-        currentScore = 0;
-        playerScoreDisplay.innerText = currentScore;
+        document.getElementById("player-name").innerText = nickname; // Update in-game info
+        roundsPlayed = 0;
+        overlayScoreDisplay.innerText = roundsPlayed;
+        document.getElementById("player-rounds").innerText = roundsPlayed; // Update in-game rounds
+        targetRounds = parseInt(roundsInput.value) || 3;
+        document.getElementById("target-rounds").innerText = targetRounds; // Update target rounds
 
         const selectedMode = gameModes[currentGameModeIndex];
         if (selectedMode === "Unimplemented") {
@@ -103,19 +119,62 @@ document.addEventListener("DOMContentLoaded", () => {
             startPongGame();
         } else if (selectedMode === "Classic with queue") {
             isMultiplayer = true;
-            // Connect via WebSocket; wait for pairing
-            connectWebSocket(nickname);
+            connectWebSocket(nickname, targetRounds);
             navigateTo("pong-page");
             document.getElementById("pong-status").innerText = translations[languageSelector.value].waitingQueue;
         }
     });
 
-    // Debug button for testing
     debugJoinButton.addEventListener("click", () => {
         startPongGame();
     });
 
-    // SPA navigation function
+    // Fullscreen change event listener
+    document.addEventListener("fullscreenchange", handleFullscreenChange);
+    document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
+    
+    function handleFullscreenChange() {
+        isFullscreen = !!document.fullscreenElement;
+        if (!isFullscreen) {
+            updateMinimizedWarning();
+            minimizedWarning.classList.remove("hidden");
+            showGameInfo(true);
+        } else {
+            minimizedWarning.classList.add("hidden");
+            showGameInfo(false);
+        }
+    }
+    
+    function showGameInfo(showSmall) {
+        if (showSmall) {
+            gameInfo.classList.add("visible");
+        } else {
+            gameInfo.classList.remove("visible");
+        }
+    }
+
+    // Allow reclicking on canvas to reenter fullscreen if not in fullscreen
+    pongCanvas.addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+            if (pongCanvas.requestFullscreen) {
+                pongCanvas.requestFullscreen();
+            } else if (pongCanvas.webkitRequestFullscreen) {
+                pongCanvas.webkitRequestFullscreen();
+            }
+        }
+    });
+
+    // Also allow clicking on the warning to enter fullscreen
+    minimizedWarning.addEventListener("click", () => {
+        if (!document.fullscreenElement) {
+            if (pongCanvas.requestFullscreen) {
+                pongCanvas.requestFullscreen();
+            } else if (pongCanvas.webkitRequestFullscreen) {
+                pongCanvas.webkitRequestFullscreen();
+            }
+        }
+    });
+
     function navigateTo(pageId) {
         document.querySelectorAll(".page").forEach(page => page.classList.remove("active"));
         document.getElementById(pageId).classList.add("active");
@@ -125,7 +184,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     window.navigateTo = navigateTo;
 
-    // Update leaderboard from backend API (sorted by wins)
     async function updateLeaderboard() {
         try {
             const response = await fetch("http://127.0.0.1:8000/api/entries/");
@@ -142,13 +200,17 @@ document.addEventListener("DOMContentLoaded", () => {
         }
     }
 
-    // WebSocket connection for multiplayer (Classic with queue)
-    function connectWebSocket(nickname) {
+    function connectWebSocket(nickname, roundsValue) {
         ws = new WebSocket("ws://127.0.0.1:8000/ws/pong/");
         ws.onopen = () => {
             console.log("WebSocket connected");
             gameToken = Math.random().toString(36).substring(2);
-            ws.send(JSON.stringify({ type: "join", nickname, token: gameToken }));
+            ws.send(JSON.stringify({ 
+                type: "join", 
+                nickname, 
+                token: gameToken, 
+                rounds: roundsValue 
+            }));
         };
         ws.onmessage = (event) => {
             const data = JSON.parse(event.data);
@@ -156,17 +218,25 @@ document.addEventListener("DOMContentLoaded", () => {
             if (data.type === "queue_update") {
                 document.getElementById("pong-status").innerText = data.message;
             } else if (data.type === "start_game") {
-                // When paired, start the game and record the game room (if needed)
                 document.getElementById("pong-status").innerText = "";
+                if (data.rounds) {
+                    targetRounds = data.rounds;
+                    document.getElementById("target-rounds").innerText = targetRounds;
+                }
                 startPongGame();
+            } else if (data.type === "waiting_list") {
+                updateWaitingList(data.waiting_list);
             } else if (data.type === "game_update") {
-                // Update opponent's paddle position
                 if (data.data && data.data.paddleY !== undefined) {
                     remotePaddleY = data.data.paddleY;
                 }
+            } else if (data.type === "game_over") {
+                if (!gameOverHandled) {
+                    gameOverHandled = true;
+                    endPongGame();
+                }
             } else if (data.type === "opponent_left") {
                 alert(data.message);
-                // Optionally, return to lobby
                 navigateTo("game-page");
             }
         };
@@ -174,62 +244,95 @@ document.addEventListener("DOMContentLoaded", () => {
         ws.onclose = () => console.log("WebSocket closed");
     }
 
-    // Start Pong game with CRT zoom effect and setup multiplayer game state
+    function updateWaitingList(waitingList) {
+        waitingPlayersList.innerHTML = "";
+        waitingList.forEach(player => {
+            const li = document.createElement("li");
+            li.innerText = `${player.nickname} (Rounds: ${player.rounds})`;
+            waitingPlayersList.appendChild(li);
+        });
+    }
+
     function startPongGame() {
-        const canvas = document.getElementById("pong-canvas");
-        canvas.classList.add("enlarged");
-        // Trigger CRT zoom animation
-        canvas.classList.remove("crt-zoom");
-        void canvas.offsetWidth;
-        canvas.classList.add("crt-zoom");
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
+        // Request fullscreen if not already
+        if (!document.fullscreenElement) {
+            if (pongCanvas.requestFullscreen) {
+                pongCanvas.requestFullscreen();
+            } else if (pongCanvas.webkitRequestFullscreen) {
+                pongCanvas.webkitRequestFullscreen();
+            }
+        }
+        pongCanvas.classList.remove("crt-zoom");
+        void pongCanvas.offsetWidth;
+        pongCanvas.classList.add("crt-zoom");
+        // Use full viewport dimensions
+        pongCanvas.width = window.innerWidth;
+        pongCanvas.height = window.innerHeight;
         endGameButton.classList.remove("hidden");
+        
+        // Update game info display
+        document.getElementById("player-name").innerText = nicknameGlobal;
+        document.getElementById("player-rounds").innerText = roundsPlayed;
+        document.getElementById("target-rounds").innerText = targetRounds;
+        
+        gameOverHandled = false;
         initPongGame();
     }
 
-    // End game: stop loop and call backend to record win
+    endGameButton.addEventListener("click", () => {
+        endPongGame();
+    });
+
     async function endPongGame() {
         cancelAnimationFrame(gameLoopId);
-        try {
-            const response = await fetch("http://127.0.0.1:8000/api/end_game/", {
-                method: "POST",
-                headers: { "Content-Type": "application/json" },
-                body: JSON.stringify({ nickname: nicknameGlobal, token: gameToken, score: currentScore })
-            });
-            if (response.ok) {
-                alert("Game ended and win recorded!");
-            } else {
-                alert("Failed to record win!");
+        // For both AI and multiplayer mode, handle game ending
+        if (isMultiplayer) {
+            try {
+                const response = await fetch("http://127.0.0.1:8000/api/end_game/", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ nickname: nicknameGlobal, token: gameToken, score: roundsPlayed })
+                });
+                if (response.ok) {
+                    alert("Game ended and win recorded!");
+                } else {
+                    alert("Failed to record win!");
+                }
+            } catch (error) {
+                console.error("Error ending game:", error);
             }
-        } catch (error) {
-            console.error("Error ending game:", error);
         }
-        const canvas = document.getElementById("pong-canvas");
-        canvas.classList.remove("enlarged");
+        // Exit fullscreen if active
+        if (document.fullscreenElement) {
+            document.exitFullscreen();
+        }
+        
+        minimizedWarning.classList.add("hidden");
         endGameButton.classList.add("hidden");
         navigateTo("leaderboard-page");
     }
 
-    // Pong game implementation
     function initPongGame() {
-        const canvas = document.getElementById("pong-canvas");
-        const ctx = canvas.getContext("2d");
-        canvas.width = canvas.clientWidth;
-        canvas.height = canvas.clientHeight;
+        const ctx = pongCanvas.getContext("2d");
+        pongCanvas.width = window.innerWidth;
+        pongCanvas.height = window.innerHeight;
 
-        const paddleWidth = 10, paddleHeight = 60;
-        let leftPaddle = { x: 10, y: canvas.height / 2 - paddleHeight / 2 };
-        // For multiplayer, rightPaddle will be controlled by opponent update;
-        // otherwise, use simple AI.
-        let rightPaddle = { x: canvas.width - 20, y: canvas.height / 2 - paddleHeight / 2 };
-        let ball = { x: canvas.width / 2, y: canvas.height / 2, vx: 4, vy: 4 };
+        const paddleWidth = 20, paddleHeight = 120;
+        let leftPaddle = { x: 30, y: pongCanvas.height / 2 - paddleHeight / 2 };
+        let rightPaddle = { x: pongCanvas.width - 50, y: pongCanvas.height / 2 - paddleHeight / 2 };
+        let ball = { 
+            x: pongCanvas.width / 2, 
+            y: pongCanvas.height / 2, 
+            speed: 6,
+            angle: Math.random() * Math.PI/4 - Math.PI/8
+        };
+        ball.vx = ball.speed * Math.cos(ball.angle);
+        ball.vy = ball.speed * Math.sin(ball.angle);
+        const speedIncrement = 0.5;
 
-        // For multiplayer, send paddle updates to server
-        canvas.addEventListener("mousemove", (e) => {
-            const rect = canvas.getBoundingClientRect();
+        pongCanvas.addEventListener("mousemove", (e) => {
+            const rect = pongCanvas.getBoundingClientRect();
             leftPaddle.y = e.clientY - rect.top - paddleHeight / 2;
-            // In multiplayer mode, send our paddle position update
             if (isMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: "game_update",
@@ -238,10 +341,12 @@ document.addEventListener("DOMContentLoaded", () => {
             }
         });
 
-        // Game loop
         function gameLoop() {
             update();
             draw();
+            // Update overlay with current score and player name
+            overlayScoreDisplay.innerText = roundsPlayed;
+            document.getElementById("player-rounds").innerText = roundsPlayed;
             gameLoopId = requestAnimationFrame(gameLoop);
         }
         gameLoop();
@@ -250,66 +355,114 @@ document.addEventListener("DOMContentLoaded", () => {
             ball.x += ball.vx;
             ball.y += ball.vy;
 
-            // Bounce off top and bottom
-            if (ball.y + ballRadius() > canvas.height || ball.y - ballRadius() < 0) {
+            if (ball.y - 7 < 0 || ball.y + 7 > pongCanvas.height) {
                 ball.vy = -ball.vy;
-                triggerSparkle(ball.x, ball.y);
             }
-            // Bounce off left paddle
-            if (ball.x - ballRadius() < leftPaddle.x + paddleWidth &&
+
+            // Collision with left paddle
+            if (ball.x - 7 < leftPaddle.x + paddleWidth &&
                 ball.y > leftPaddle.y && ball.y < leftPaddle.y + paddleHeight) {
-                ball.vx = -ball.vx;
-                triggerSparkle(ball.x, ball.y);
+                let hitPos = (ball.y - leftPaddle.y) / paddleHeight;
+                let reflectAngle = (hitPos - 0.5) * Math.PI/2;
+                ball.speed += speedIncrement;
+                ball.vx = ball.speed * Math.cos(reflectAngle);
+                ball.vy = ball.speed * Math.sin(reflectAngle);
+                if (ball.vx < 0) ball.vx = -ball.vx;
             }
-            // Bounce off right paddle (multiplayer or AI)
-            if (ball.x + ballRadius() > rightPaddle.x &&
+
+            // Collision with right paddle
+            if (ball.x + 7 > rightPaddle.x &&
                 ball.y > rightPaddle.y && ball.y < rightPaddle.y + paddleHeight) {
-                ball.vx = -ball.vx;
-                triggerSparkle(ball.x, ball.y);
+                let hitPos = (ball.y - rightPaddle.y) / paddleHeight;
+                let reflectAngle = (hitPos - 0.5) * Math.PI/2;
+                ball.speed += speedIncrement;
+                ball.vx = -ball.speed * Math.cos(reflectAngle);
+                ball.vy = ball.speed * Math.sin(reflectAngle);
+                if (ball.vx > 0) ball.vx = -ball.vx;
             }
-            // Off-screen ball: update score and reset ball
-            if (ball.x + ballRadius() < 0 || ball.x - ballRadius() > canvas.width) {
-                currentScore++;
-                playerScoreDisplay.innerText = currentScore;
-                ball.x = canvas.width / 2;
-                ball.y = canvas.height / 2;
-                ball.vx = -ball.vx;
+
+            // Off-screen check: count round for both modes
+            if (ball.x + 7 < 0 || ball.x - 7 > pongCanvas.width) {
+                roundsPlayed++;
+                
+                if (roundsPlayed >= targetRounds) {
+                    if (isMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
+                        ws.send(JSON.stringify({ type: "game_over", score: roundsPlayed }));
+                    }
+                    endPongGame();
+                    return;
+                }
+                ball.speed = 6;
+                ball.x = pongCanvas.width / 2;
+                ball.y = pongCanvas.height / 2;
+                ball.angle = Math.random() * Math.PI/4 - Math.PI/8;
+                if (ball.x + 7 < 0) {
+                    ball.vx = ball.speed * Math.cos(ball.angle);
+                } else {
+                    ball.vx = -ball.speed * Math.cos(ball.angle);
+                }
+                ball.vy = ball.speed * Math.sin(ball.angle);
             }
-            // Update right paddle:
+
             if (isMultiplayer) {
-                // In multiplayer, set right paddle based on remote update
                 rightPaddle.y = remotePaddleY;
             } else {
-                // AI: simple tracking of the ball
-                if (ball.y < rightPaddle.y + paddleHeight / 2) {
-                    rightPaddle.y -= 3;
-                } else {
-                    rightPaddle.y += 3;
+                // Improved AI - slightly more challenging
+                const predictedBallY = ball.y + (ball.vy * Math.abs((rightPaddle.x - ball.x) / ball.vx)) * 0.8;
+                const targetY = predictedBallY - paddleHeight / 2;
+                
+                // Add some randomness/delay to make it more human-like
+                if (Math.abs(rightPaddle.y - targetY) > 5) {
+                    if (rightPaddle.y < targetY) {
+                        rightPaddle.y += 4.5;
+                    } else {
+                        rightPaddle.y -= 4.5;
+                    }
                 }
             }
         }
 
         function draw() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.clearRect(0, 0, pongCanvas.width, pongCanvas.height);
+            
+            // Draw dividing line
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.setLineDash([5, 10]);
+            ctx.beginPath();
+            ctx.moveTo(pongCanvas.width / 2, 0);
+            ctx.lineTo(pongCanvas.width / 2, pongCanvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw score info on canvas
+            if (isFullscreen) {
+                ctx.fillStyle = "#ffffff";
+                ctx.font = "24px Arial";
+                ctx.textAlign = "center";
+                ctx.fillText(nicknameGlobal + ": " + roundsPlayed + " / " + targetRounds, pongCanvas.width / 2, 30);
+            }
+            
             // Draw ball
             ctx.fillStyle = "#00d4ff";
             ctx.beginPath();
-            ctx.arc(ball.x, ball.y, ballRadius(), 0, Math.PI * 2);
+            ctx.arc(ball.x, ball.y, 7, 0, Math.PI * 2);
             ctx.fill();
-            // Draw left paddle
+            
+            // Draw paddles
             ctx.fillStyle = "#007bff";
             ctx.fillRect(leftPaddle.x, leftPaddle.y, paddleWidth, paddleHeight);
-            // Draw right paddle
             ctx.fillStyle = "#ff758c";
             ctx.fillRect(rightPaddle.x, rightPaddle.y, paddleWidth, paddleHeight);
         }
-
-        function ballRadius() {
-            return 7;
-        }
     }
 
-    // Three.js sparkle effect on collision
+    window.addEventListener('resize', () => {
+        if (document.fullscreenElement) {
+            pongCanvas.width = window.innerWidth;
+            pongCanvas.height = window.innerHeight;
+        }
+    });
+
     function triggerSparkle(x, y) {
         let sparkleCanvas = document.getElementById("sparkle-canvas");
         if (!sparkleCanvas) {
