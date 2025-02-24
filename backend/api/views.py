@@ -1,28 +1,29 @@
-from django.shortcuts import render
-
-# backend/api/views.py
+import json
 from django.http import JsonResponse
 from django.views.decorators.csrf import csrf_exempt
-import json
-from .models import TestEntry
+from .models import Player
 
-def test_view(request):
-    return JsonResponse({"message": "Hello from Django API"})
-
-
-# Fetch leaderboard (sorted by most recent players)
 def get_entries(request):
-    entries = list(TestEntry.objects.order_by("-created_at").values()[:10])  # Get last 10 players
-    return JsonResponse({"entries": entries})
+    players = Player.objects.all().order_by('-wins')
+    data = [{"name": p.name, "wins": p.wins} for p in players]
+    return JsonResponse({"entries": data})
 
-# Add a nickname entry
 @csrf_exempt
-def add_entry(request):
+def end_game(request):
     if request.method == "POST":
         try:
             data = json.loads(request.body)
-            new_entry = TestEntry.objects.create(name=data["name"])
-            return JsonResponse({"message": "Entry added", "id": new_entry.id}, status=201)
+            nickname = data.get("nickname")
+            token = data.get("token")
+            score = data.get("score")
+            # Validate that a token is provided and score is a number.
+            if not token or not isinstance(score, (int, float)):
+                return JsonResponse({"error": "Invalid token or score"}, status=400)
+            player, created = Player.objects.get_or_create(name=nickname)
+            # (In production, validate the token against one generated at game start)
+            player.wins += 1
+            player.save()
+            return JsonResponse({"message": "Win recorded"}, status=200)
         except Exception as e:
             return JsonResponse({"error": str(e)}, status=400)
-    return JsonResponse({"error": "Invalid request"}, status=400)
+    return JsonResponse({"error": "Invalid method"}, status=405)

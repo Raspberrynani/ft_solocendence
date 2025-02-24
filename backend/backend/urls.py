@@ -15,12 +15,11 @@ Including another URLconf
     2. Add a URL to urlpatterns:  path('blog/', include('blog.urls'))
 """
 from django.contrib import admin
-from django.urls import path
-from api.views import test_view, get_entries, add_entry
+from django.urls import path, include
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('api/test/', test_view),
-    path('api/entries/', get_entries),
-    path('api/add-entry/', add_entry),
+    path('api/', include('api.urls')),  # Now includes /api/entries/ and /api/end_game/
+    # If you have any HTTP endpoints for pong, you can include them here:
+    # path('api/', include('pong.urls')),
 ]

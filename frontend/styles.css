@@ -1,9 +1,9 @@
 /* General Page Styling */
 body {
-    background: linear-gradient(135deg, #1a1a2e, #16213e, #0f3460);
+    background: url("pong-bg.gif") no-repeat center center fixed;
+    background-size: cover;
     font-family: 'Arial', sans-serif;
     color: #87CEEB;
-    text-align: center;
     margin: 0;
     padding: 0;
     height: 100vh;
@@ -21,15 +21,14 @@ body {
     background: rgba(255, 255, 255, 0.1);
     backdrop-filter: blur(10px);
     box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
-    transition: all 0.3s ease-in-out;
 }
 
 /* Pages */
 .page {
     display: none;
     animation: fadeIn 0.5s ease-in-out;
+    text-align: center;
 }
-
 .page.active {
     display: block;
 }
@@ -55,16 +54,20 @@ h2 {
     cursor: pointer;
     transition: transform 0.2s ease, box-shadow 0.2s ease;
 }
-
 .button:hover {
     transform: scale(1.05);
     box-shadow: 0 4px 10px rgba(0, 212, 255, 0.5);
 }
-
 .button.secondary {
     background: linear-gradient(90deg, #ff758c, #ff7eb3);
 }
-
+.button.debug {
+    position: absolute;
+    top: 5px;
+    right: 5px;
+    font-size: 12px;
+    background: #444;
+}
 .hidden {
     opacity: 0;
     pointer-events: none;
@@ -72,7 +75,9 @@ h2 {
 
 /* Nickname Input */
 .nickname-input {
-    width: 100%;
+    width: 80%;
+    display: block;
+    margin: 0 auto 15px;
     padding: 12px;
     font-size: 16px;
     text-align: center;
@@ -83,39 +88,83 @@ h2 {
     outline: none;
     transition: border 0.3s ease-in-out;
 }
-
 .nickname-input::placeholder {
     color: rgba(255, 255, 255, 0.5);
 }
-
 .nickname-input:focus {
     border: 2px solid #00d4ff;
 }
 
-/* Leaderboard */
-.leaderboard-list {
-    list-style: none;
-    padding: 0;
-    max-height: 200px;
-    overflow-y: auto;
+/* Join Game Button Container */
+.queue-wrapper {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 15px 0;
+}
+.queue-wrapper i {
+    font-size: 24px;
+    cursor: pointer;
+    margin: 0 10px;
+}
+.join-game-button {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 15px;
+    background: linear-gradient(90deg, #007bff, #00d4ff);
+    border: none;
+    border-radius: 10px;
+    color: #ffffff;
+    font-size: 18px;
+    font-weight: bold;
+    text-align: center;
+}
+.join-game-button .button-text {
+    line-height: 1.2;
+}
+.join-game-button .game-mode-indicator {
+    font-size: 12px;
+    margin-top: 4px;
+    opacity: 0.8;
 }
 
-.leaderboard-list li {
-    background: rgba(255, 255, 255, 0.1);
-    padding: 10px;
-    margin: 5px 0;
-    border-radius: 5px;
-    font-size: 16px;
+/* Pong Canvas */
+#pong-canvas {
+    width: 100%;
+    height: 300px;
+    background: #000;
+    display: block;
+    margin: 0 auto;
+    border: 2px solid #00d4ff;
+    border-radius: 10px;
+    transition: all 0.5s ease;
+}
+#pong-canvas.enlarged {
+    height: 500px;
 }
 
-/* Fade-in animation */
+/* CRT Zoom Animation */
+@keyframes crtZoom {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
+  }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+#pong-canvas.crt-zoom {
+  animation: crtZoom 1s ease-out;
+}
+
+/* Fade-in Animation */
 @keyframes fadeIn {
-    from {
-        opacity: 0;
-        transform: scale(0.95);
-    }
-    to {
-        opacity: 1;
-        transform: scale(1);
-    }
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
 }

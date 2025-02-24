@@ -20,7 +20,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
 # SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = 'django-insecure-g+snmw*os#0$&s-1^+at87j!u@kyiqrj$6sd-booep_9%#!(x%'
+SECRET_KEY = 'django-insecure-9$$)9s51ex74)p+o7w#a_rz+q9xwah^)liqne2h(y1_abm%3#%'
 
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
@@ -37,15 +37,29 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'corsheaders',
-    'rest_framework',
     'channels',
-    'api',
+    'corsheaders',
+    'api',   # We will create this app next
+    'pong',  # And this one for WebSocket game logic
 ]
 
+CHANNEL_LAYERS = {
+    "default": {
+        "BACKEND": "channels.layers.InMemoryChannelLayer",
+    }
+}
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
+    "http://localhost:8000",
+    "http://127.0.0.1:8000",
+]
+
+
 MIDDLEWARE = [
-    'django.middleware.security.SecurityMiddleware',
     'corsheaders.middleware.CorsMiddleware',
+    'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -54,11 +68,7 @@ MIDDLEWARE = [
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
 
-ASGI_APPLICATION = "backend.asgi.application"
-
 ROOT_URLCONF = 'backend.urls'
-
-APPEND_SLASH=False
 
 TEMPLATES = [
     {
@@ -131,8 +141,6 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-
-# backend/settings.py
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.postgresql',
@@ -143,11 +151,3 @@ DATABASES = {
         'PORT': '5432',
     }
 }
-
-CORS_ALLOWED_ORIGINS = [
-    "http://127.0.0.1:8001",
-    "http://localhost:8001",
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
-]
-
