@@ -4,6 +4,9 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pong.io - Menu</title>
+  <!-- Bootstrap CSS -->
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <!-- Custom CSS (after Bootstrap to override styles) -->
   <link rel="stylesheet" href="styles.css">
   <!-- Include Font Awesome for arrow icons -->
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/4.7.0/css/font-awesome.min.css">
@@ -11,29 +14,33 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
 </head>
 <body>
-  <div id="app">
+  <div id="app" class="container-fluid p-0">
     <!-- Language Selection Page -->
     <div id="language-page" class="page active">
-      <h2>Select Language</h2>
-      <select id="language-selector" class="button">
+      <h2 class="text-center">Select Language</h2>
+      <select id="language-selector" class="button form-select mb-3">
         <option value="en">English</option>
         <option value="es">Español</option>
         <option value="fr">Français</option>
       </select>
-      <button onclick="navigateTo('game-page')" class="button">Next</button>
+      <button onclick="navigateTo('game-page')" class="button btn btn-primary w-100">Next</button>
     </div>
 
     <!-- Game Start Page (Nickname & Round Selection) -->
     <div id="game-page" class="page">
-      <h2 id="enter-name">Enter Your Nickname</h2>
-      <input type="text" id="nickname" class="nickname-input" placeholder="Enter a cool name">
+      <h2 id="enter-name" class="text-center">Enter Your Nickname</h2>
+      <div class="mb-3">
+        <input type="text" id="nickname" class="nickname-input form-control" placeholder="Enter a cool name">
+      </div>
       <!-- Input for round amount -->
-      <input type="number" id="rounds-input" class="rounds-input" placeholder="Enter rounds" value="3" min="1">
+      <div class="mb-3">
+        <input type="number" id="rounds-input" class="rounds-input form-control" placeholder="Enter rounds" value="3" min="1">
+      </div>
 
       <!-- Join Game Button with two lines and arrow icons -->
-      <div class="queue-wrapper">
+      <div class="queue-wrapper d-flex align-items-center justify-content-center">
         <i id="prevMode" class="fa fa-caret-left" style="visibility: visible;"></i>
-        <button id="start-game" class="button join-game-button hidden">
+        <button id="start-game" class="button join-game-button btn btn-primary hidden">
           <div class="button-text">JOIN GAME</div>
           <div class="game-mode-indicator">Classic with queue</div>
         </button>
@@ -41,20 +48,22 @@
       </div>
 
       <!-- Waiting Players Section -->
-      <div id="waiting-players-container">
-        <h3>Currently Waiting Players</h3>
-        <ul id="waiting-players-list"></ul>
+      <div id="waiting-players-container" class="card bg-transparent mt-3">
+        <div class="card-body">
+          <h3 class="card-title h5 mb-2">Currently Waiting Players</h3>
+          <ul id="waiting-players-list" class="list-group list-group-flush bg-transparent"></ul>
+        </div>
       </div>
 
-      <button onclick="navigateTo('leaderboard-page')" class="button secondary">Leaderboard</button>
+      <button onclick="navigateTo('leaderboard-page')" class="button btn btn-secondary secondary mt-3 w-100">Leaderboard</button>
     </div>
 
     <!-- Pong Game Page -->
     <div id="pong-page" class="page">
       <!-- Game Overlay for Fullscreen Info -->
-      <div id="game-overlay">
-        <div id="overlay-player-name"></div>
-        <div id="overlay-score"></div>
+      <div id="game-overlay" class="position-absolute">
+        <div id="overlay-player-name" class="text-center"></div>
+        <div id="overlay-score" class="text-center"></div>
       </div>
       
       <!-- Mini info display for when game is minimized -->
@@ -62,20 +71,31 @@
         <span id="player-name"></span> | Rounds: <span id="player-rounds">0</span> / <span id="target-rounds">0</span>
       </div>
       
-      <canvas id="pong-canvas"></canvas>
-      <button id="end-game" class="button secondary hidden">Leave Game</button>
-      <!-- Hidden debug button for testing -->
-      <button id="debug-join" class="button debug hidden">DEBUG JOIN</button>
-      <h3 id="pong-status" class="message">Waiting for an opponent...</h3>
+      <canvas id="pong-canvas" class="w-100"></canvas>
+
+      <div class="d-flex justify-content-between mt-3">
+        <button id="end-game" class="button btn btn-secondary secondary hidden">Leave Game</button>
+        <!-- Hidden debug button for testing -->
+        <button id="debug-join" class="button btn btn-dark debug hidden">DEBUG JOIN</button>
+      </div>
+      <h3 id="pong-status" class="message text-center mt-3">Waiting for an opponent...</h3>
     </div>
 
     <!-- Leaderboard Page -->
     <div id="leaderboard-page" class="page">
-      <h2>Leaderboard</h2>
-      <ul id="leaderboard" class="leaderboard-list"></ul>
-      <button onclick="navigateTo('game-page')" class="button secondary">Back</button>
+      <h2 class="text-center">Leaderboard</h2>
+      <div class="card bg-transparent mb-3">
+        <div class="card-body p-0">
+          <ul id="leaderboard" class="leaderboard-list list-group list-group-flush"></ul>
+        </div>
+      </div>
+      <button onclick="navigateTo('game-page')" class="button btn btn-secondary secondary w-100">Back</button>
     </div>
   </div>
+
+  <!-- Bootstrap JS Bundle -->
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="background-pong.js"></script>
   <script src="main.js"></script>
 </body>
 </html>

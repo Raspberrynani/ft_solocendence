@@ -1,26 +1,40 @@
-/* General Page Styling */
+/* General Page Styling with animated background */
 body {
-    background: url("pong-bg.gif") no-repeat center center fixed;
-    background-size: cover;
-    font-family: 'Arial', sans-serif;
-    color: #87CEEB;
+    /* Remove the background image since we'll use canvas */
+    background-color: #000 !important;
+    font-family: 'Arial', sans-serif !important;
+    color: #87CEEB !important;
     margin: 0;
     padding: 0;
     height: 100vh;
     display: flex;
     justify-content: center;
     align-items: center;
+    overflow: hidden; /* Prevent scrollbars */
 }
 
-/* App Container */
+/* Canvas background */
+#background-pong {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    z-index: -1;
+}
+
+/* App Container - Override Bootstrap container-fluid */
 #app {
-    width: 80%;
-    max-width: 400px;
-    padding: 20px;
-    border-radius: 20px;
-    background: rgba(255, 255, 255, 0.1);
-    backdrop-filter: blur(10px);
-    box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+    width: 80% !important;
+    max-width: 400px !important;
+    padding: 20px !important;
+    border-radius: 20px !important;
+    background: rgba(0, 0, 0, 0.7) !important; /* Darker background for better contrast */
+    backdrop-filter: blur(5px) !important;
+    box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3) !important;
+    margin: 0 auto !important;
+    position: relative; /* Keep above the background */
+    z-index: 10;
 }
 
 /* Pages */
@@ -35,64 +49,88 @@ body {
 
 /* Headings */
 h2 {
-    font-size: 24px;
-    margin-bottom: 15px;
+    font-size: 24px !important;
+    margin-bottom: 15px !important;
+    color: #87CEEB !important;
+    text-shadow: 0 0 10px rgba(135, 206, 235, 0.5) !important;
 }
 
-/* Buttons */
+/* Buttons - Add Bootstrap classes but keep custom styling */
 .button {
     display: block;
     width: 100%;
-    padding: 15px;
-    margin: 10px 0;
-    font-size: 18px;
-    font-weight: bold;
-    color: #ffffff;
-    background: linear-gradient(90deg, #007bff, #00d4ff);
-    border: none;
-    border-radius: 10px;
+    padding: 15px !important;
+    margin: 10px 0 !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    color: #ffffff !important;
+    background: linear-gradient(90deg, #007bff, #00d4ff) !important;
+    border: none !important;
+    border-radius: 10px !important;
     cursor: pointer;
-    transition: transform 0.2s ease, box-shadow 0.2s ease;
+    transition: transform 0.2s ease, 
+                box-shadow 0.2s ease,
+                opacity 0.5s ease-in-out !important;
 }
 .button:hover {
     transform: scale(1.05);
-    box-shadow: 0 4px 10px rgba(0, 212, 255, 0.5);
+    box-shadow: 0 4px 15px rgba(0, 212, 255, 0.7);
 }
 .button.secondary {
-    background: linear-gradient(90deg, #ff758c, #ff7eb3);
+    background: linear-gradient(90deg, #ff758c, #ff7eb3) !important;
 }
 .button.debug {
     position: absolute;
     top: 5px;
     right: 5px;
     font-size: 12px;
-    background: #444;
+    background: #444 !important;
 }
 .hidden {
     opacity: 0;
     pointer-events: none;
+    /* Do not use display: none to allow for opacity transitions */
 }
 
-/* Nickname & Rounds Input */
-.nickname-input, .rounds-input {
-    width: 80%;
-    display: block;
-    margin: 0 auto 15px;
-    padding: 12px;
-    font-size: 16px;
-    text-align: center;
-    border-radius: 10px;
-    border: 2px solid rgba(255, 255, 255, 0.3);
-    background: rgba(255, 255, 255, 0.1);
-    color: #ffffff;
-    outline: none;
-    transition: border 0.3s ease-in-out;
+/* Bootstrap button overrides */
+.btn-primary {
+    background: linear-gradient(90deg, #007bff, #00d4ff) !important;
+    border: none !important;
 }
-.nickname-input::placeholder, .rounds-input::placeholder {
-    color: rgba(255, 255, 255, 0.5);
+.btn-secondary {
+    background: linear-gradient(90deg, #ff758c, #ff7eb3) !important;
+    border: none !important;
 }
-.nickname-input:focus, .rounds-input:focus {
-    border: 2px solid #00d4ff;
+
+/* Nickname & Rounds Input - Override Bootstrap form controls */
+.nickname-input, .rounds-input, .form-control, .form-select {
+    width: 80% !important;
+    display: block !important;
+    margin: 0 auto 15px !important;
+    padding: 12px !important;
+    font-size: 16px !important;
+    text-align: center !important;
+    border-radius: 10px !important;
+    border: 2px solid rgba(255, 255, 255, 0.3) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    color: #ffffff !important;
+    outline: none !important;
+    transition: border 0.3s ease-in-out !important;
+}
+.nickname-input::placeholder, .rounds-input::placeholder, 
+.form-control::placeholder, .form-select::placeholder {
+    color: rgba(255, 255, 255, 0.5) !important;
+}
+.nickname-input:focus, .rounds-input:focus,
+.form-control:focus, .form-select:focus {
+    border: 2px solid #00d4ff !important;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.5) !important;
+}
+
+/* Override form select options */
+.form-select option {
+    background-color: #2a2a2a !important;
+    color: white !important;
 }
 
 /* Join Game Button Container */
@@ -102,10 +140,34 @@ h2 {
     justify-content: center;
     margin: 15px 0;
 }
+
+
+/* Fix for button visibility */
+.button.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* But make sure the button is actually shown when not hidden */
+#start-game {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0.5s ease-in-out;
+}
+
+/* When hidden, apply the transition */
+#start-game.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease-in-out;
+}
+
 .queue-wrapper i {
     font-size: 24px;
     cursor: pointer;
     margin: 0 10px;
+    color: #00d4ff;
+    text-shadow: 0 0 10px rgba(0, 212, 255, 0.7);
 }
 .join-game-button {
     display: flex;
@@ -113,13 +175,23 @@ h2 {
     align-items: center;
     justify-content: center;
     padding: 15px;
-    background: linear-gradient(90deg, #007bff, #00d4ff);
+    background: linear-gradient(90deg, #007bff, #00d4ff) !important;
     border: none;
     border-radius: 10px;
     color: #ffffff;
     font-size: 18px;
     font-weight: bold;
     text-align: center;
+    transition: transform 0.2s ease, 
+                box-shadow 0.2s ease,
+                opacity 0.5s ease-in-out !important;
+    /* Starting with zero opacity allows for fade in */
+    opacity: 0;
+    pointer-events: none; /* Disable interaction when invisible */
+}
+.join-game-button.visible {
+    opacity: 1;
+    pointer-events: auto; /* Enable interaction when visible */
 }
 .join-game-button .button-text {
     line-height: 1.2;
@@ -140,12 +212,38 @@ h2 {
     border: 2px solid #00d4ff;
     border-radius: 10px;
     transition: all 0.5s ease;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
 }
 #pong-canvas.enlarged {
     height: 500px;
 }
 
+/* Override Bootstrap card styles */
+.card {
+    background: rgba(0, 0, 0, 0.6) !important;
+    border-radius: 10px !important;
+    border: 1px solid rgba(0, 212, 255, 0.2) !important;
+    box-shadow: 0 0 15px rgba(0, 212, 255, 0.1) !important;
+}
+.card-body {
+    padding: 10px !important;
+}
+.card-title {
+    margin: 0 0 5px !important;
+    font-size: 16px !important;
+    color: #87CEEB !important;
+}
 
+/* Override list group styles */
+.list-group {
+    background: transparent !important;
+}
+.list-group-item {
+    background: transparent !important;
+    border: none !important;
+    color: #fff !important;
+    padding: 2px 0 !important;
+}
 
 /* CRT Zoom Animation */
 @keyframes crtZoom {
@@ -168,9 +266,10 @@ h2 {
 /* Waiting Players Section */
 #waiting-players-container {
     margin: 15px 0;
-    background: rgba(0, 0, 0, 0.3);
+    background: rgba(0, 0, 0, 0.6);
     padding: 10px;
     border-radius: 10px;
+    border: 1px solid rgba(0, 212, 255, 0.2);
 }
 #waiting-players-container h3 {
     margin: 0 0 5px;
@@ -190,6 +289,39 @@ h2 {
     color: #fff;
 }
 
+/* Leaderboard styling */
+.leaderboard-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+.leaderboard-list li {
+    margin: 5px 0;
+    color: #fff;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+}
+.leaderboard-list li:last-child {
+    border-bottom: none;
+}
+
+/* Game info */
+.game-info {
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-size: 14px;
+    position: absolute;
+    top: 10px;
+    left: 10px;
+    display: none;
+    box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+}
+.game-info.visible {
+    display: block;
+}
 
 /* Fade-in Animation */
 @keyframes fadeIn {
@@ -197,3 +329,39 @@ h2 {
     to { opacity: 1; transform: scale(1); }
 }
 
+/* Add a subtle glow effect to important elements */
+h2, h3, .button, #pong-canvas {
+    animation: glow 4s infinite alternate;
+}
+
+@keyframes glow {
+    from { box-shadow: 0 0 5px rgba(0, 212, 255, 0.1); }
+    to { box-shadow: 0 0 15px rgba(0, 212, 255, 0.4); }
+}
+
+/* Animated minimized warning */
+.minimized-warning {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: #fff;
+    padding: 15px 20px;
+    border-radius: 10px;
+    font-size: 18px;
+    text-align: center;
+    box-shadow: 0 0 20px rgba(0, 212, 255, 0.5);
+    animation: pulse 2s infinite;
+    cursor: pointer;
+    z-index: 100;
+}
+.minimized-warning.hidden {
+    display: none;
+}
+
+@keyframes pulse {
+    0% { transform: translate(-50%, -50%) scale(1); }
+    50% { transform: translate(-50%, -50%) scale(1.05); }
+    100% { transform: translate(-50%, -50%) scale(1); }
+}

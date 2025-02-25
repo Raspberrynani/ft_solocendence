@@ -125,8 +125,25 @@ document.addEventListener("DOMContentLoaded", () => {
     nicknameInput.addEventListener("input", () => {
         if (nicknameInput.value.trim().length > 0) {
             startGameButton.classList.remove("hidden");
+            startGameButton.style.opacity = "0";
+            
+            requestAnimationFrame(() => {
+                startGameButton.style.transition = "opacity 0.5s ease-in-out";
+                requestAnimationFrame(() => {
+                    startGameButton.style.opacity = "1";
+                    startGameButton.style.pointerEvents = "auto";
+                });
+            });
         } else {
-            startGameButton.classList.add("hidden");
+            startGameButton.style.transition = "opacity 0.5s ease-in-out";
+            startGameButton.style.opacity = "0";
+            startGameButton.style.pointerEvents = "none";
+            
+            setTimeout(() => {
+                if (nicknameInput.value.trim().length === 0) {
+                    startGameButton.classList.add("hidden");
+                }
+            }, 500);
         }
     });
 
@@ -383,15 +400,49 @@ document.addEventListener("DOMContentLoaded", () => {
         ball.vy = ball.speed * Math.sin(ball.angle);
         const speedIncrement = 0.5;
 
-        pongCanvas.addEventListener("mousemove", (e) => {
+        let mouseMoveHandler = (e) => {
             const rect = pongCanvas.getBoundingClientRect();
             leftPaddle.y = e.clientY - rect.top - paddleHeight / 2;
+            
+            // Constrain paddle to canvas
+            leftPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, leftPaddle.y));
+            
             if (isMultiplayer && ws && ws.readyState === WebSocket.OPEN) {
                 ws.send(JSON.stringify({
                     type: "game_update",
                     data: { paddleY: leftPaddle.y }
                 }));
             }
+        };
+        
+        // Add the event listener to both canvas and window
+        pongCanvas.addEventListener("mousemove", mouseMoveHandler);
+        window.addEventListener("mousemove", mouseMoveHandler);
+        
+        // Also add resize handler to recalculate positions
+        window.addEventListener('resize', () => {
+            if (document.fullscreenElement) {
+                pongCanvas.width = window.innerWidth;
+                pongCanvas.height = window.innerHeight;
+                
+                // Adjust paddle positions after resize
+                leftPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, leftPaddle.y));
+                rightPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, rightPaddle.y));
+            }
+        });
+        
+        // Add full screen change handler to ensure proper coordinates
+        document.addEventListener("fullscreenchange", () => {
+            // Short delay to allow fullscreen to complete
+            setTimeout(() => {
+                if (document.fullscreenElement) {
+                    pongCanvas.width = window.innerWidth;
+                    pongCanvas.height = window.innerHeight;
+                }
+                // Reset paddle position to middle of screen height when changing display modes
+                leftPaddle.y = pongCanvas.height / 2 - paddleHeight / 2;
+                rightPaddle.y = pongCanvas.height / 2 - paddleHeight / 2;
+            }, 100);
         });
 
         function gameLoop() {
