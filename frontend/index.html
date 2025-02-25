@@ -50,9 +50,14 @@
       <!-- Waiting Players Section -->
       <div id="waiting-players-container" class="card bg-transparent mt-3">
         <div class="card-body">
-          <h3 class="card-title h5 mb-2">Currently Waiting Players</h3>
+          <h3 class="card-title h5 mb-2">Currently Waiting Players <small class="text-muted">(click to join)</small></h3>
           <ul id="waiting-players-list" class="list-group list-group-flush bg-transparent"></ul>
         </div>
+      </div>
+      
+      <!-- Window size warning banner -->
+      <div id="window-size-warning" class="window-size-warning">
+        Your window is too small or not rectangular enough for optimal gameplay. Please resize your window.
       </div>
 
       <button onclick="navigateTo('leaderboard-page')" class="button btn btn-secondary secondary mt-3 w-100">Leaderboard</button>

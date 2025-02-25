@@ -12,6 +12,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const overlayScoreDisplay = document.getElementById("overlay-score"); // overlay element
     const endGameButton = document.getElementById("end-game");
     const waitingPlayersList = document.getElementById("waiting-players-list"); // <ul> for waiting players
+    const windowSizeWarning = document.getElementById("window-size-warning"); // Window size warning banner
 
     const pongCanvas = document.getElementById("pong-canvas");
     const gameInfo = document.getElementById("game-info");
@@ -27,6 +28,7 @@ document.addEventListener("DOMContentLoaded", () => {
     let remotePaddleY = 0;
     let gameOverHandled = false;
     let isFullscreen = false;
+    let isWindowSizeValid = false; // Track if the window size is valid for gameplay
 
     // -----------------------------
     // 2) UI "Pages" and navigation
@@ -37,10 +39,70 @@ document.addEventListener("DOMContentLoaded", () => {
         if (pageId === "leaderboard-page") {
             updateLeaderboard();
         }
+        
+        // Check window size when navigating to game page
+        if (pageId === "game-page") {
+            checkWindowSize();
+        }
     }
     window.navigateTo = navigateTo;
-    // Show the initial page
+    
+    // Function to check if the window size is adequate for gameplay
+    function checkWindowSize() {
+        const minWidth = 800;  // Minimum width in pixels
+        const minHeight = 450; // Minimum height for 16:9 ratio
+        const idealAspectRatio = 16/9; // Exactly 16:9 aspect ratio
+        const aspectRatioTolerance = 0.1; // Allow some deviation from perfect 16:9
+        
+        const currentWidth = window.innerWidth;
+        const currentHeight = window.innerHeight;
+        const currentAspectRatio = currentWidth / currentHeight;
+        
+        // Check if aspect ratio is close enough to 16:9
+        const isAspectRatioValid = Math.abs(currentAspectRatio - idealAspectRatio) <= aspectRatioTolerance;
+        
+        isWindowSizeValid = (currentWidth >= minWidth) && 
+                           (currentHeight >= minHeight) && 
+                           isAspectRatioValid;
+        
+        console.log(`Window size check: ${currentWidth}x${currentHeight}, aspect: ${currentAspectRatio.toFixed(2)}, valid: ${isWindowSizeValid}`);
+        console.log(`Ideal ratio: ${idealAspectRatio.toFixed(2)}, difference: ${Math.abs(currentAspectRatio - idealAspectRatio).toFixed(2)}`);
+        
+        // Update window size warning with specific information
+        if (!isWindowSizeValid) {
+            let warningText = "Your window is too small";
+            
+            if (!isAspectRatioValid) {
+                warningText += " and not in 16:9 format";
+            }
+            
+            windowSizeWarning.textContent = warningText + ". Please resize your window for optimal gameplay.";
+        }
+        
+        // Update UI based on window size validity
+        if (isWindowSizeValid) {
+            windowSizeWarning.classList.remove("active");
+            startGameButton.classList.remove("disabled");
+        } else {
+            windowSizeWarning.classList.add("active");
+            startGameButton.classList.add("disabled");
+        }
+    }
+    
+    // Add window resize listener to continuously check window size
+    // Add window resize listener to continuously check window size
+    window.addEventListener("resize", checkWindowSize);
+    
+    // Also check window size when the window gets focus
+    window.addEventListener("focus", checkWindowSize);
+    
+    // Check window size periodically to ensure it's up to date
+    setInterval(checkWindowSize, 2000);
+    
+    // Show the initial page and do initial window size check
     navigateTo("language-page");
+    checkWindowSize();
+
 
     // Translations for a few user-visible strings
     const translations = {
@@ -172,7 +234,8 @@ document.addEventListener("DOMContentLoaded", () => {
     const minimizedWarning = document.createElement("div");
     minimizedWarning.id = "minimized-warning";
     minimizedWarning.className = "minimized-warning hidden";
-    document.getElementById("pong-page").appendChild(minimizedWarning);
+    // Append directly to body instead of the pong-page for proper fixed positioning
+    document.body.appendChild(minimizedWarning);
 
     function updateMinimizedWarning() {
         const currentLang = languageSelector.value;
@@ -226,6 +289,16 @@ document.addEventListener("DOMContentLoaded", () => {
     // 8) Start Game Button
     // -----------------------------
     startGameButton.addEventListener("click", async () => {
+        // Force a fresh window size check right before attempting to start
+        checkWindowSize();
+        
+        // First, check window size - don't proceed if too small
+        if (!isWindowSizeValid) {
+            windowSizeWarning.classList.add("active");
+            alert("Your window needs to be at least 800x450 pixels and have a 16:9 aspect ratio for optimal gameplay. Please resize your window.");
+            return;
+        }
+        
         const nickname = nicknameInput.value.trim();
         if (!nickname) {
             alert("Please enter a nickname!");
@@ -294,9 +367,46 @@ document.addEventListener("DOMContentLoaded", () => {
             return;
         }
 
+        // Make sure we're using the right elements
+        const roundsInputElement = document.getElementById("rounds-input");
+        const nicknameInputElement = document.getElementById("nickname");
+        const startGameButtonElement = document.getElementById("start-game");
+
         waitingList.forEach(player => {
             const li = document.createElement("li");
-            li.innerText = `${player.nickname} (Rounds: ${player.rounds})`;
+            li.className = "list-group-item clickable-player";
+            li.innerHTML = `<span class="player-name">${player.nickname}</span> <span class="player-rounds">(Rounds: ${player.rounds})</span>`;
+            
+            // Add click handler directly on the element
+            li.onclick = function() {
+                console.log("Player clicked:", player);
+                
+                // Set the rounds input value
+                roundsInputElement.value = player.rounds;
+                
+                // Force UI update for the game mode
+                currentGameModeIndex = 0; // Set to "Classic with queue"
+                updateGameModeIndicator();
+                
+                // Highlight the rounds input briefly to show it was updated
+                roundsInputElement.classList.add("highlight-input");
+                setTimeout(() => {
+                    roundsInputElement.classList.remove("highlight-input");
+                }, 1000);
+                
+                // Focus on the start game button or nickname input
+                if (nicknameInputElement.value.trim().length > 0) {
+                    if (!startGameButtonElement.classList.contains("hidden")) {
+                        startGameButtonElement.classList.add("pulse");
+                        setTimeout(() => {
+                            startGameButtonElement.classList.remove("pulse");
+                        }, 1500);
+                    }
+                } else {
+                    nicknameInputElement.focus();
+                }
+            };
+            
             waitingPlayersList.appendChild(li);
         });
     }
