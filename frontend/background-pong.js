@@ -1,3 +1,7 @@
+/**
+ * Background Pong Animation
+ * Creates an ambient background Pong game animation
+ */
 document.addEventListener("DOMContentLoaded", () => {
     // Create a background canvas that fills the entire window
     const bgCanvas = document.createElement('canvas');
@@ -31,7 +35,7 @@ document.addEventListener("DOMContentLoaded", () => {
         }
         
         resizeCanvas();
-        window.addEventListener('resize', resizeCanvas);
+        window.addEventListener('resize', Utils.debounce(resizeCanvas, 200));
         
         // Game objects
         const paddleWidth = Math.max(10, Math.floor(canvas.width * 0.01));
@@ -60,21 +64,38 @@ document.addEventListener("DOMContentLoaded", () => {
             velocityY: 3
         };
         
+        let lastFrameTime = 0;
+        let gameLoopId;
+        
         // Main game loop
-        function gameLoop() {
-            updateGame();
+        function gameLoop(timestamp) {
+            // Calculate delta time
+            const deltaTime = timestamp - lastFrameTime;
+            lastFrameTime = timestamp;
+            
+            // Use fixed delta time if first frame or unreasonable delta
+            const delta = (deltaTime > 0 && deltaTime < 100) ? deltaTime / 16.7 : 1;
+            
+            updateGame(delta);
             drawGame();
-            requestAnimationFrame(gameLoop);
+            gameLoopId = requestAnimationFrame(gameLoop);
         }
         
-        function updateGame() {
-            // Update ball position
-            ball.x += ball.velocityX;
-            ball.y += ball.velocityY;
+        function updateGame(delta) {
+            // Update ball position with delta time
+            ball.x += ball.velocityX * delta;
+            ball.y += ball.velocityY * delta;
             
             // Ball collision with top and bottom walls
             if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
                 ball.velocityY = -ball.velocityY;
+                
+                // Keep ball in bounds
+                if (ball.y - ball.radius < 0) {
+                    ball.y = ball.radius;
+                } else {
+                    ball.y = canvas.height - ball.radius;
+                }
             }
             
             // Determine which paddle to check for collision
@@ -119,17 +140,20 @@ document.addEventListener("DOMContentLoaded", () => {
             }
             
             // AI for both paddles - predict ball movement
-            updateAIPaddle(leftPaddle, ball, -1);
-            updateAIPaddle(rightPaddle, ball, 1);
+            updateAIPaddle(leftPaddle, ball, -1, delta);
+            updateAIPaddle(rightPaddle, ball, 1, delta);
         }
         
-        function updateAIPaddle(paddle, ball, direction) {
+        function updateAIPaddle(paddle, ball, direction, delta) {
             // Only move if the ball is coming towards this paddle
             if (Math.sign(ball.velocityX) === direction) {
                 // Simple prediction of where ball will be when it reaches paddle's x position
                 const distanceToTravel = direction > 0 ? 
                     paddle.x - ball.x : 
                     ball.x - paddle.x;
+                
+                // Avoid division by zero
+                if (Math.abs(ball.velocityX) < 0.1) return;
                 
                 const timeToImpact = distanceToTravel / Math.abs(ball.velocityX);
                 
@@ -151,9 +175,9 @@ document.addEventListener("DOMContentLoaded", () => {
             
             // Move paddle towards target with a smoothing effect
             if (paddle.y < paddle.target) {
-                paddle.y = Math.min(paddle.target, paddle.y + paddle.speed);
+                paddle.y = Math.min(paddle.target, paddle.y + paddle.speed * delta);
             } else if (paddle.y > paddle.target) {
-                paddle.y = Math.max(paddle.target, paddle.y - paddle.speed);
+                paddle.y = Math.max(paddle.target, paddle.y - paddle.speed * delta);
             }
             
             // Constrain paddle to canvas
@@ -174,12 +198,16 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.stroke();
             ctx.setLineDash([]);
             
-            // Draw paddles
-            ctx.fillStyle = '#007bff';
-            ctx.fillRect(leftPaddle.x, leftPaddle.y, paddleWidth, paddleHeight);
+            // Draw paddles with rounded corners
+            const cornerRadius = Math.min(5, paddleWidth / 2);
             
+            // Draw left paddle
+            ctx.fillStyle = '#007bff';
+            drawRoundedRect(ctx, leftPaddle.x, leftPaddle.y, paddleWidth, paddleHeight, cornerRadius);
+            
+            // Draw right paddle
             ctx.fillStyle = '#ff758c';
-            ctx.fillRect(rightPaddle.x, rightPaddle.y, paddleWidth, paddleHeight);
+            drawRoundedRect(ctx, rightPaddle.x, rightPaddle.y, paddleWidth, paddleHeight, cornerRadius);
             
             // Draw ball
             ctx.fillStyle = '#00d4ff';
@@ -188,7 +216,45 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.fill();
         }
         
+        /**
+         * Draw a rounded rectangle
+         * @param {CanvasRenderingContext2D} ctx - Canvas context
+         * @param {number} x - X position
+         * @param {number} y - Y position
+         * @param {number} width - Rectangle width
+         * @param {number} height - Rectangle height
+         * @param {number} radius - Corner radius
+         */
+        function drawRoundedRect(ctx, x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.arcTo(x + width, y, x + width, y + height, radius);
+            ctx.arcTo(x + width, y + height, x, y + height, radius);
+            ctx.arcTo(x, y + height, x, y, radius);
+            ctx.arcTo(x, y, x + width, y, radius);
+            ctx.closePath();
+            ctx.fill();
+        }
+        
         // Start the game loop
-        gameLoop();
+        gameLoopId = requestAnimationFrame(gameLoop);
+        
+        // Handle visibility changes to save CPU/battery
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                // Page is hidden, pause animation
+                cancelAnimationFrame(gameLoopId);
+            } else {
+                // Page is visible again, restart animation
+                lastFrameTime = performance.now();
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+        });
+        
+        // Return cleanup function
+        return function cleanup() {
+            cancelAnimationFrame(gameLoopId);
+            window.removeEventListener('resize', resizeCanvas);
+        };
     }
 });
