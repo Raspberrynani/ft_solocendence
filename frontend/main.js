@@ -39,70 +39,17 @@ document.addEventListener("DOMContentLoaded", () => {
         if (pageId === "leaderboard-page") {
             updateLeaderboard();
         }
-        
-        // Check window size when navigating to game page
-        if (pageId === "game-page") {
-            checkWindowSize();
-        }
     }
     window.navigateTo = navigateTo;
-    
-    // Function to check if the window size is adequate for gameplay
-    function checkWindowSize() {
-        const minWidth = 800;  // Minimum width in pixels
-        const minHeight = 450; // Minimum height for 16:9 ratio
-        const idealAspectRatio = 16/9; // Exactly 16:9 aspect ratio
-        const aspectRatioTolerance = 0.1; // Allow some deviation from perfect 16:9
-        
-        const currentWidth = window.innerWidth;
-        const currentHeight = window.innerHeight;
-        const currentAspectRatio = currentWidth / currentHeight;
-        
-        // Check if aspect ratio is close enough to 16:9
-        const isAspectRatioValid = Math.abs(currentAspectRatio - idealAspectRatio) <= aspectRatioTolerance;
-        
-        isWindowSizeValid = (currentWidth >= minWidth) && 
-                           (currentHeight >= minHeight) && 
-                           isAspectRatioValid;
-        
-        console.log(`Window size check: ${currentWidth}x${currentHeight}, aspect: ${currentAspectRatio.toFixed(2)}, valid: ${isWindowSizeValid}`);
-        console.log(`Ideal ratio: ${idealAspectRatio.toFixed(2)}, difference: ${Math.abs(currentAspectRatio - idealAspectRatio).toFixed(2)}`);
-        
-        // Update window size warning with specific information
-        if (!isWindowSizeValid) {
-            let warningText = "Your window is too small";
-            
-            if (!isAspectRatioValid) {
-                warningText += " and not in 16:9 format";
-            }
-            
-            windowSizeWarning.textContent = warningText + ". Please resize your window for optimal gameplay.";
-        }
-        
-        // Update UI based on window size validity
-        if (isWindowSizeValid) {
-            windowSizeWarning.classList.remove("active");
-            startGameButton.classList.remove("disabled");
-        } else {
-            windowSizeWarning.classList.add("active");
-            startGameButton.classList.add("disabled");
-        }
-    }
-    
-    // Add window resize listener to continuously check window size
-    // Add window resize listener to continuously check window size
-    window.addEventListener("resize", checkWindowSize);
-    
-    // Also check window size when the window gets focus
-    window.addEventListener("focus", checkWindowSize);
-    
-    // Check window size periodically to ensure it's up to date
-    setInterval(checkWindowSize, 2000);
-    
-    // Show the initial page and do initial window size check
-    navigateTo("language-page");
-    checkWindowSize();
 
+    // Show the initial page
+    navigateTo("language-page");
+
+    // Remove the window-size-warning element from the DOM completely
+    const warningElement = document.getElementById("window-size-warning");
+    if (warningElement) {
+        warningElement.remove();
+    }
 
     // Translations for a few user-visible strings
     const translations = {
@@ -289,16 +236,6 @@ document.addEventListener("DOMContentLoaded", () => {
     // 8) Start Game Button
     // -----------------------------
     startGameButton.addEventListener("click", async () => {
-        // Force a fresh window size check right before attempting to start
-        checkWindowSize();
-        
-        // First, check window size - don't proceed if too small
-        if (!isWindowSizeValid) {
-            windowSizeWarning.classList.add("active");
-            alert("Your window needs to be at least 800x450 pixels and have a 16:9 aspect ratio for optimal gameplay. Please resize your window.");
-            return;
-        }
-        
         const nickname = nicknameInput.value.trim();
         if (!nickname) {
             alert("Please enter a nickname!");
@@ -309,6 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
             alert("This nickname is too cool to be used here!");
             return;
         }
+        
         nicknameGlobal = nickname;
         playerNameDisplay.innerText = nickname;
         document.getElementById("player-name").innerText = nickname; // Update in-game info
@@ -492,27 +430,115 @@ document.addEventListener("DOMContentLoaded", () => {
         navigateTo("leaderboard-page");
     }
 
+    // NEW FUNCTION: calculateAIAction for improved AI decision making
+    function calculateAIAction(paddle, ball, ballVelocity, paddleHeight) {
+        // If ball is moving away from the AI paddle, just center paddle
+        if (ballVelocity.x < 0) {
+            const paddleCenter = paddle.y + paddleHeight / 2;
+            const canvasCenter = pongCanvas.height / 2;
+            
+            if (paddleCenter < canvasCenter - 20) {
+                return 'down';
+            } else if (paddleCenter > canvasCenter + 20) {
+                return 'up';
+            }
+            return null; // No action needed
+        }
+        
+        // Ball is moving toward AI paddle, try to predict
+        // Calculate time to impact based on x distance and velocity
+        const distanceToImpact = paddle.x - ball.x;
+        
+        // Avoid division by zero
+        if (ballVelocity.x === 0) return null;
+        
+        const timeToImpact = distanceToImpact / ballVelocity.x;
+        
+        // If negative time, ball is moving away
+        if (timeToImpact <= 0) return null;
+        
+        // Predict y position of ball at impact
+        let predictedY = ball.y + (ballVelocity.y * timeToImpact);
+        
+        // Account for ball bouncing off walls
+        const bounces = Math.floor(predictedY / pongCanvas.height);
+        if (bounces % 2 === 1) {
+            // Odd number of bounces
+            predictedY = pongCanvas.height - (predictedY % pongCanvas.height);
+        } else {
+            // Even number of bounces
+            predictedY = predictedY % pongCanvas.height;
+        }
+        
+        // Add some randomness to make AI imperfect
+        const randomOffset = (Math.random() - 0.5) * paddleHeight * 0.5;
+        predictedY += randomOffset;
+        
+        // Calculate target position
+        const targetY = predictedY - paddleHeight / 2;
+        const currentCenter = paddle.y + paddleHeight / 2;
+        
+        // Determine action based on target position
+        const tolerance = 10; // Tolerance to avoid jitter
+        
+        if (currentCenter < targetY - tolerance) {
+            return 'down';
+        } else if (currentCenter > targetY + tolerance) {
+            return 'up';
+        }
+        
+        return null; // No action needed, already aligned
+    }
+
     function initPongGame() {
         const ctx = pongCanvas.getContext("2d");
-        pongCanvas.width = window.innerWidth;
-        pongCanvas.height = window.innerHeight;
+        pongCanvas.width = pongCanvas.clientWidth;
+        pongCanvas.height = pongCanvas.clientHeight;
 
-        const paddleWidth = 20, paddleHeight = 120;
-        let leftPaddle = { x: 30, y: pongCanvas.height / 2 - paddleHeight / 2 };
-        let rightPaddle = { x: pongCanvas.width - 50, y: pongCanvas.height / 2 - paddleHeight / 2 };
+        const paddleWidth = Math.max(10, Math.floor(pongCanvas.width * 0.02));
+        const paddleHeight = Math.max(60, Math.floor(pongCanvas.height * 0.2));
+        const ballRadius = Math.max(5, Math.floor(Math.min(pongCanvas.width, pongCanvas.height) * 0.01));    
+        const leftPaddleX = paddleWidth * 2;
+        const rightPaddleX = pongCanvas.width - (paddleWidth * 3);
+        
+        let leftPaddle = { 
+            x: leftPaddleX, 
+            y: pongCanvas.height / 2 - paddleHeight / 2 
+        };
+        
+        let rightPaddle = { 
+            x: rightPaddleX, 
+            y: pongCanvas.height / 2 - paddleHeight / 2 
+        };
+
         let ball = {
             x: pongCanvas.width / 2,
             y: pongCanvas.height / 2,
-            speed: 6,
+            radius: ballRadius,
+            speed: Math.max(4, Math.floor(pongCanvas.width * 0.005)),
             angle: Math.random() * Math.PI / 4 - Math.PI / 8
         };
+        
         ball.vx = ball.speed * Math.cos(ball.angle);
         ball.vy = ball.speed * Math.sin(ball.angle);
+        
         const speedIncrement = 0.5;
+
+        // NEW: AI state tracking
+        let aiState = {
+            lastUpdateTime: 0,
+            action: null, // 'up', 'down', or null
+            lastBallPosition: { x: ball.x, y: ball.y },
+            decisionInterval: 1000 // 1 second interval between decisions
+        };
 
         let mouseMoveHandler = (e) => {
             const rect = pongCanvas.getBoundingClientRect();
-            leftPaddle.y = e.clientY - rect.top - paddleHeight / 2;
+            // Get the mouse position relative to the canvas
+            const mouseY = e.clientY - rect.top;
+            
+            // Calculate paddle position, keeping it centered on the cursor
+            leftPaddle.y = mouseY - (paddleHeight / 2);
             
             // Constrain paddle to canvas
             leftPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, leftPaddle.y));
@@ -524,7 +550,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 }));
             }
         };
-        
+
         // Add the event listener to both canvas and window
         pongCanvas.addEventListener("mousemove", mouseMoveHandler);
         window.addEventListener("mousemove", mouseMoveHandler);
@@ -616,20 +642,39 @@ document.addEventListener("DOMContentLoaded", () => {
                 ball.vy = ball.speed * Math.sin(ball.angle);
             }
 
-            // If multiplayer, track the opponent's paddle
+            // UPDATED AI LOGIC - Replace the previous implementation
             if (isMultiplayer) {
                 rightPaddle.y = remotePaddleY;
             } else {
-                // AI mode
-                const predictedBallY = ball.y + (ball.vy * Math.abs((rightPaddle.x - ball.x) / ball.vx)) * 0.8;
-                const targetY = predictedBallY - paddleHeight / 2;
-                if (Math.abs(rightPaddle.y - targetY) > 5) {
-                    if (rightPaddle.y < targetY) {
-                        rightPaddle.y += 4.5;
-                    } else {
-                        rightPaddle.y -= 4.5;
-                    }
+                // AI mode - only make decisions once per second
+                const now = Date.now();
+                
+                // Record current ball position and calculate velocity
+                const ballVelocity = {
+                    x: ball.x - aiState.lastBallPosition.x,
+                    y: ball.y - aiState.lastBallPosition.y
+                };
+                
+                // Only update AI decision once per second
+                if (now - aiState.lastUpdateTime >= aiState.decisionInterval) {
+                    aiState.lastUpdateTime = now;
+                    
+                    // Decide what action to take based on ball position
+                    aiState.action = calculateAIAction(rightPaddle, ball, {x: ball.vx, y: ball.vy}, paddleHeight);
+                    
+                    // Save current ball position for next calculation
+                    aiState.lastBallPosition = { x: ball.x, y: ball.y };
                 }
+                
+                // Execute the stored action (simulating keyboard input)
+                if (aiState.action === 'up') {
+                    rightPaddle.y -= 4.5; // Move up
+                } else if (aiState.action === 'down') {
+                    rightPaddle.y += 4.5; // Move down
+                }
+                
+                // Constrain paddle to canvas
+                rightPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, rightPaddle.y));
             }
         }
 
