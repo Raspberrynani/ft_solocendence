@@ -213,9 +213,20 @@ h2 {
     border-radius: 10px;
     transition: all 0.5s ease;
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+    cursor: pointer;
 }
-#pong-canvas.enlarged {
-    height: 500px;
+
+/* Important: When in fullscreen, maximize the canvas */
+#pong-canvas:fullscreen,
+#pong-canvas:-webkit-full-screen,
+#pong-canvas:-moz-full-screen,
+#pong-canvas:-ms-fullscreen {
+    width: 100vw !important;
+    height: 100vh !important;
+    border: none !important;
+    border-radius: 0 !important;
+    margin: 0 !important;
+    padding: 0 !important;
 }
 
 /* Override Bootstrap card styles */
@@ -392,6 +403,7 @@ h2 {
     left: 10px;
     display: none;
     box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
+    z-index: 1000;
 }
 .game-info.visible {
     display: block;
@@ -415,7 +427,7 @@ h2, h3, .button, #pong-canvas {
 
 /* Animated minimized warning */
 .minimized-warning {
-    position: absolute;
+    position: fixed;
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
@@ -429,7 +441,53 @@ h2, h3, .button, #pong-canvas {
     animation: pulse 2s infinite;
     cursor: pointer;
     z-index: 100;
+    max-width: 80%;
 }
 .minimized-warning.hidden {
     display: none;
+}
+
+/* Game controls overlay */
+.game-controls-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    z-index: 50;
+    color: white;
+    text-align: center;
+    font-size: 24px;
+    pointer-events: none;
+}
+
+.game-controls-overlay.hidden {
+    display: none;
+}
+
+.game-controls-overlay h3 {
+    margin-bottom: 20px;
+    color: #00d4ff;
+}
+
+.game-controls-overlay p {
+    max-width: 80%;
+    margin: 0 auto;
+    font-size: 18px;
+    color: rgba(255, 255, 255, 0.8);
+}
+
+/* Pause overlay pulse animation */
+@keyframes pausePulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
+}
+
+.pause-pulse {
+    animation: pausePulse 2s infinite ease-in-out;
 }
