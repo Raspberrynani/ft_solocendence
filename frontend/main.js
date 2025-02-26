@@ -494,23 +494,23 @@ document.addEventListener("DOMContentLoaded", () => {
         const ctx = pongCanvas.getContext("2d");
         pongCanvas.width = pongCanvas.clientWidth;
         pongCanvas.height = pongCanvas.clientHeight;
-
-        const paddleWidth = Math.max(10, Math.floor(pongCanvas.width * 0.02));
-        const paddleHeight = Math.max(60, Math.floor(pongCanvas.height * 0.2));
-        const ballRadius = Math.max(5, Math.floor(Math.min(pongCanvas.width, pongCanvas.height) * 0.01));    
-        const leftPaddleX = paddleWidth * 2;
-        const rightPaddleX = pongCanvas.width - (paddleWidth * 3);
+    
+        // These variables need to be accessible throughout the function
+        let paddleWidth = Math.max(10, Math.floor(pongCanvas.width * 0.02));
+        let paddleHeight = Math.max(60, Math.floor(pongCanvas.height * 0.2));
+        let ballRadius = Math.max(5, Math.floor(Math.min(pongCanvas.width, pongCanvas.height) * 0.01));    
         
+        // Calculate initial paddle positions
         let leftPaddle = { 
-            x: leftPaddleX, 
+            x: paddleWidth * 2, 
             y: pongCanvas.height / 2 - paddleHeight / 2 
         };
         
         let rightPaddle = { 
-            x: rightPaddleX, 
+            x: pongCanvas.width - (paddleWidth * 3), 
             y: pongCanvas.height / 2 - paddleHeight / 2 
         };
-
+    
         let ball = {
             x: pongCanvas.width / 2,
             y: pongCanvas.height / 2,
@@ -523,15 +523,31 @@ document.addEventListener("DOMContentLoaded", () => {
         ball.vy = ball.speed * Math.sin(ball.angle);
         
         const speedIncrement = 0.5;
-
-        // NEW: AI state tracking
+    
+        // AI state tracking
         let aiState = {
             lastUpdateTime: 0,
             action: null, // 'up', 'down', or null
             lastBallPosition: { x: ball.x, y: ball.y },
             decisionInterval: 1000 // 1 second interval between decisions
         };
-
+    
+        // Function to update game dimensions and positions
+        function updateGameDimensions() {
+            // Update paddle dimensions based on new canvas size
+            paddleWidth = Math.max(10, Math.floor(pongCanvas.width * 0.02));
+            paddleHeight = Math.max(60, Math.floor(pongCanvas.height * 0.2));
+            ballRadius = Math.max(5, Math.floor(Math.min(pongCanvas.width, pongCanvas.height) * 0.01));
+            
+            // Critical fix: Always recalculate the right paddle's X position
+            leftPaddle.x = paddleWidth * 2;
+            rightPaddle.x = pongCanvas.width - (paddleWidth * 3);
+            
+            // Constrain paddles to canvas
+            leftPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, leftPaddle.y));
+            rightPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, rightPaddle.y));
+        }
+    
         let mouseMoveHandler = (e) => {
             const rect = pongCanvas.getBoundingClientRect();
             // Get the mouse position relative to the canvas
@@ -550,37 +566,35 @@ document.addEventListener("DOMContentLoaded", () => {
                 }));
             }
         };
-
+    
         // Add the event listener to both canvas and window
         pongCanvas.addEventListener("mousemove", mouseMoveHandler);
         window.addEventListener("mousemove", mouseMoveHandler);
         
-        // Also add resize handler to recalculate positions
+        // Resize handler that updates all game elements
         window.addEventListener('resize', () => {
             if (document.fullscreenElement) {
                 pongCanvas.width = window.innerWidth;
                 pongCanvas.height = window.innerHeight;
-                
-                // Adjust paddle positions after resize
-                leftPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, leftPaddle.y));
-                rightPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, rightPaddle.y));
+                updateGameDimensions();
             }
         });
         
-        // Add full screen change handler to ensure proper coordinates
+        // Fullscreen change handler
         document.addEventListener("fullscreenchange", () => {
             // Short delay to allow fullscreen to complete
             setTimeout(() => {
                 if (document.fullscreenElement) {
                     pongCanvas.width = window.innerWidth;
                     pongCanvas.height = window.innerHeight;
+                    updateGameDimensions();
                 }
                 // Reset paddle position to middle of screen height when changing display modes
                 leftPaddle.y = pongCanvas.height / 2 - paddleHeight / 2;
                 rightPaddle.y = pongCanvas.height / 2 - paddleHeight / 2;
             }, 100);
         });
-
+    
         function gameLoop() {
             update();
             draw();
@@ -589,15 +603,15 @@ document.addEventListener("DOMContentLoaded", () => {
             gameLoopId = requestAnimationFrame(gameLoop);
         }
         gameLoop();
-
+    
         function update() {
             ball.x += ball.vx;
             ball.y += ball.vy;
-
+    
             if (ball.y - 7 < 0 || ball.y + 7 > pongCanvas.height) {
                 ball.vy = -ball.vy;
             }
-
+    
             // Collision with left paddle
             if (ball.x - 7 < leftPaddle.x + paddleWidth &&
                 ball.y > leftPaddle.y && ball.y < leftPaddle.y + paddleHeight) {
@@ -608,7 +622,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ball.vy = ball.speed * Math.sin(reflectAngle);
                 if (ball.vx < 0) ball.vx = -ball.vx;
             }
-
+    
             // Collision with right paddle
             if (ball.x + 7 > rightPaddle.x &&
                 ball.y > rightPaddle.y && ball.y < rightPaddle.y + paddleHeight) {
@@ -619,7 +633,7 @@ document.addEventListener("DOMContentLoaded", () => {
                 ball.vy = ball.speed * Math.sin(reflectAngle);
                 if (ball.vx > 0) ball.vx = -ball.vx;
             }
-
+    
             // Off-screen check => we count a "round"
             if (ball.x + 7 < 0 || ball.x - 7 > pongCanvas.width) {
                 roundsPlayed++;
@@ -641,8 +655,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 }
                 ball.vy = ball.speed * Math.sin(ball.angle);
             }
-
-            // UPDATED AI LOGIC - Replace the previous implementation
+    
+            // AI or multiplayer paddle updates
             if (isMultiplayer) {
                 rightPaddle.y = remotePaddleY;
             } else {
@@ -677,10 +691,10 @@ document.addEventListener("DOMContentLoaded", () => {
                 rightPaddle.y = Math.max(0, Math.min(pongCanvas.height - paddleHeight, rightPaddle.y));
             }
         }
-
+    
         function draw() {
             ctx.clearRect(0, 0, pongCanvas.width, pongCanvas.height);
-
+        
             // Dividing line
             ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
             ctx.setLineDash([5, 10]);
@@ -689,7 +703,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ctx.lineTo(pongCanvas.width / 2, pongCanvas.height);
             ctx.stroke();
             ctx.setLineDash([]);
-
+        
             // Show score info if in fullscreen
             if (isFullscreen) {
                 ctx.fillStyle = "#ffffff";
@@ -698,19 +712,40 @@ document.addEventListener("DOMContentLoaded", () => {
                 ctx.fillText(nicknameGlobal + ": " + roundsPlayed + " / " + targetRounds,
                              pongCanvas.width / 2, 30);
             }
-
+        
             // Ball
             ctx.fillStyle = "#00d4ff";
             ctx.beginPath();
             ctx.arc(ball.x, ball.y, 7, 0, Math.PI * 2);
             ctx.fill();
-
-            // Left paddle
+        
+            // Draw rounded paddles
+            
+            // Left paddle with rounded corners
+            const paddleRadius = Math.min(8, paddleWidth / 2); // Radius for rounded corners
+            
+            // Create thinner paddles by reducing the width
+            const thinnerWidth = paddleWidth * 0.6; // Make paddles 60% of original width
+            
+            // Left paddle (blue)
             ctx.fillStyle = "#007bff";
-            ctx.fillRect(leftPaddle.x, leftPaddle.y, paddleWidth, paddleHeight);
-            // Right paddle
+            drawRoundedRect(leftPaddle.x, leftPaddle.y, thinnerWidth, paddleHeight, paddleRadius);
+            
+            // Right paddle (pink)
             ctx.fillStyle = "#ff758c";
-            ctx.fillRect(rightPaddle.x, rightPaddle.y, paddleWidth, paddleHeight);
+            drawRoundedRect(rightPaddle.x, rightPaddle.y, thinnerWidth, paddleHeight, paddleRadius);
+        }
+        
+        // Helper function to draw rounded rectangles
+        function drawRoundedRect(x, y, width, height, radius) {
+            ctx.beginPath();
+            ctx.moveTo(x + radius, y);
+            ctx.arcTo(x + width, y, x + width, y + height, radius);
+            ctx.arcTo(x + width, y + height, x, y + height, radius);
+            ctx.arcTo(x, y + height, x, y, radius);
+            ctx.arcTo(x, y, x + width, y, radius);
+            ctx.closePath();
+            ctx.fill();
         }
     }
 
