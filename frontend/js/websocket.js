@@ -13,7 +13,22 @@ const WebSocketManager = (function() {
     // Constants
     const MAX_RECONNECT_ATTEMPTS = 5;
     const RECONNECT_DELAY = 3000; // 3 seconds
-    const WS_URL = "ws://127.0.0.1:8000/ws/pong/";
+    const WS_URL = (() => {
+      // Get protocol (ws or wss) based on current page protocol
+      const protocol = window.location.protocol === 'https:' ? 'wss://' : 'ws://';
+      
+      // Get hostname
+      const hostname = window.location.hostname;
+      
+      // Get port - use the same port as the current page
+      // This ensures the WebSocket connection goes through the same Nginx proxy
+      const port = window.location.port;
+      
+      // Build the URL
+      return `${protocol}${hostname}${port ? ':' + port : ''}/ws/pong/`;
+    })();
+
+    console.log("WebSocket connecting to:", WS_URL);
     
     /**
      * Initialize WebSocket connection

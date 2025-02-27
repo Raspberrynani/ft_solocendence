@@ -37,6 +37,15 @@ document.addEventListener("DOMContentLoaded", () => {
     waitingPlayersList: document.getElementById("waiting-players-list")
   };
   
+  function getApiBaseUrl() {
+    // Use the same protocol and host as the current page
+    const protocol = window.location.protocol;
+    const hostname = window.location.hostname;
+    const port = window.location.port;
+    
+    return `${protocol}//${hostname}${port ? ':' + port : ''}/api`;
+  }
+  
   // Application state
   const appState = {
     nickname: "",
@@ -65,6 +74,8 @@ document.addEventListener("DOMContentLoaded", () => {
       onLanguageChange: handleLanguageChange
     }
   });
+
+  
   
   // Initialize websocket with callbacks
   WebSocketManager.init({
@@ -412,12 +423,20 @@ document.addEventListener("DOMContentLoaded", () => {
     try {
       Utils.showLoading(elements.leaderboardList);
       
-      const response = await fetch("http://127.0.0.1:8000/api/entries/");
+      const apiUrl = `${getApiBaseUrl()}/entries/`;
+      console.log("Fetching leaderboard from:", apiUrl);
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
       const data = await response.json();
       
       elements.leaderboardList.innerHTML = "";
       
-      if (data.entries.length === 0) {
+      if (!data.entries || data.entries.length === 0) {
         const li = document.createElement("li");
         li.innerText = "No entries yet";
         elements.leaderboardList.appendChild(li);
@@ -517,7 +536,10 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         Utils.showLoading(elements.pongStatus);
         
-        const response = await fetch("http://127.0.0.1:8000/api/end_game/", {
+        const apiUrl = `${getApiBaseUrl()}/end_game/`;
+        console.log("Sending end game request to:", apiUrl);
+        
+        const response = await fetch(apiUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ 
@@ -530,7 +552,8 @@ document.addEventListener("DOMContentLoaded", () => {
         if (response.ok) {
           Utils.showToast("Game ended and win recorded!", "success");
         } else {
-          Utils.showToast("Failed to record win!", "error");
+          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
+          Utils.showToast(`Failed to record win: ${errorData.error || response.statusText}`, "error");
         }
       } catch (error) {
         console.error("Error ending game:", error);

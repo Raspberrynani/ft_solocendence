@@ -9,7 +9,7 @@ https://docs.djangoproject.com/en/5.1/topics/settings/
 For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
-
+import os
 from pathlib import Path
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -25,7 +25,12 @@ SECRET_KEY = 'django-insecure-9$$)9s51ex74)p+o7w#a_rz+q9xwah^)liqne2h(y1_abm%3#%
 # SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    'localhost',
+    '127.0.0.1',
+    '0.0.0.0',
+    # Add your domain if you have one
+]
 
 
 # Application definition
@@ -50,8 +55,13 @@ CHANNEL_LAYERS = {
 }
 
 CORS_ALLOWED_ORIGINS = [
-    "http://localhost:8001",
-    "http://127.0.0.1:8001",
+    "https://localhost:8444",
+    "https://127.0.0.1:8444",
+    "https://localhost:8001",
+    "https://127.0.0.1:8001",
+    "https://localhost:8001",
+    "https://127.0.0.1:8001",
+    # Keep your existing entries
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://192.168.1.100:8000",
@@ -60,6 +70,17 @@ CORS_ALLOWED_ORIGINS = [
     "http://172.31.184.155:8001",
 ]
 
+CSRF_TRUSTED_ORIGINS = [
+    "https://localhost:8444",
+    "https://127.0.0.1:8444",
+]
+
+#security
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SECURE_SSL_REDIRECT = False  # Set to True in production
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
 
 MIDDLEWARE = [
     'corsheaders.middleware.CorsMiddleware',
@@ -151,7 +172,7 @@ DATABASES = {
         'NAME': 'pongdb',
         'USER': 'ponguser',
         'PASSWORD': 'WillowRapids',
-        'HOST': 'localhost',
-        'PORT': '5432',
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }

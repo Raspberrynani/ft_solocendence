@@ -9,18 +9,47 @@ services:
       POSTGRES_PASSWORD: WillowRapids
     ports:
       - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ponguser -d pongdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
 
   backend:
     build: ./backend
     restart: always
     depends_on:
-      - db
+      db:
+        condition: service_healthy
     ports:
-      - "8000:8000"
+      - "8000:8000"  # HTTP
+      - "8443:8443"  # HTTPS
+    volumes:
+      - ./certs:/app/certs:ro
+      - ./backend:/app
+    environment:
+      - SSL_ENABLED=false  # Set to true when certificates are ready
+      - SSL_CERT_FILE=/app/certs/cert.pem
+      - SSL_KEY_FILE=/app/certs/key.pem
+      - DB_HOST=db
+      - DB_PORT=5432
+      - POSTGRES_DB=pongdb
+      - POSTGRES_USER=ponguser
+      - POSTGRES_PASSWORD=WillowRapids
 
   frontend:
     image: nginx
     volumes:
       - ./frontend:/usr/share/nginx/html
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf
+      - ./certs:/etc/nginx/certs:ro
     ports:
-      - "8001:80"
+      - "8001:80"   # HTTP
+      - "8444:443"  # HTTPS
+    depends_on:
+      - backend
+
+volumes:
+  postgres_data:
