@@ -18,6 +18,25 @@ async function fetchCsrfToken() {
 document.addEventListener("DOMContentLoaded", () => {
   fetchCsrfToken();
   // Ensure cookies have secure attributes when on HTTPS
+
+  document.querySelectorAll(".page").forEach(page => {
+    page.classList.remove("active");
+  });
+  
+  // Activate only the language page
+  const languagePage = document.getElementById("language-page");
+  if (languagePage) {
+    languagePage.classList.add("active");
+  }
+  
+  // Check if the privacy page has the "active" class in the HTML
+  const privacyPage = document.getElementById("privacy-policy-page");
+  if (privacyPage && privacyPage.classList.contains("active")) {
+    // Remove the active class from the HTML
+    privacyPage.classList.remove("active");
+    console.log("Removed active class from privacy policy page");
+  }
+
   function setupSecureCookies() {
     if (window.location.protocol === 'https:') {
       document.cookie = "secureOnly=true; secure; SameSite=Strict";
@@ -169,7 +188,9 @@ document.addEventListener("DOMContentLoaded", () => {
     applyCode: document.getElementById("apply-code"),
     generateCode: document.getElementById("generate-code"),
     copyCode: document.getElementById("copy-code"),
-    startCustomGame: document.getElementById("start-custom-game")
+    startCustomGame: document.getElementById("start-custom-game"),
+    playerStatsDashboard: document.getElementById("player-stats-dashboard"),
+
 
   };
   
@@ -247,6 +268,45 @@ document.addEventListener("DOMContentLoaded", () => {
     UIManager.toggleStartButton(elements.nicknameInput.value.trim().length > 0);
   });
   
+  function addPrivacyPolicyButton() {
+    const privacyButton = document.createElement('button');
+    privacyButton.id = 'privacy-policy-button';
+    privacyButton.className = 'button btn btn-secondary mt-2 w-100';
+    privacyButton.setAttribute('data-navigate', 'privacy-policy-page');
+    privacyButton.innerHTML = 'Privacy Policy / GDPR';
+    
+    // Find where to insert it (after the leaderboard button)
+    const leaderboardButton = document.getElementById('leaderboard-button');
+    if (leaderboardButton && leaderboardButton.parentNode) {
+      leaderboardButton.parentNode.insertBefore(privacyButton, leaderboardButton.nextSibling);
+    } else {
+      console.error("Could not find leaderboard button to insert privacy policy button");
+      // Fallback - add to game page
+      const gamePage = document.getElementById('game-page');
+      if (gamePage) {
+        gamePage.appendChild(privacyButton);
+      }
+    }
+    
+    // Add event listener for navigation
+    privacyButton.addEventListener('click', function() {
+      UIManager.navigateTo('privacy-policy-page');
+    });
+  }
+  
+  // Call the function to add the button
+  addPrivacyPolicyButton();
+  
+  // Also make back button work
+  const privacyBackButton = document.getElementById('privacy-back-button');
+  if (privacyBackButton) {
+    privacyBackButton.addEventListener('click', function() {
+      UIManager.navigateTo('game-page');
+    });
+  } else {
+    console.warn("Privacy back button not found in DOM");
+  }
+
   // Set up navigation buttons
   document.getElementById('next-button').addEventListener('click', () => {
     UIManager.navigateTo('game-page');
@@ -678,105 +738,105 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Fetch and update the leaderboard
    */
-  async function updateLeaderboard() {
-    try {
-      Utils.showLoading(elements.leaderboardList);
+  // async function updateLeaderboard() {
+  //   try {
+  //     Utils.showLoading(elements.leaderboardList);
       
-      const apiUrl = `${getApiBaseUrl()}/entries/`;
-      console.log("Fetching leaderboard from:", apiUrl);
+  //     const apiUrl = `${getApiBaseUrl()}/entries/`;
+  //     console.log("Fetching leaderboard from:", apiUrl);
       
-      const response = await fetch(apiUrl);
+  //     const response = await fetch(apiUrl);
       
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-      }
+  //     if (!response.ok) {
+  //       throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+  //     }
       
-      const data = await response.json();
+  //     const data = await response.json();
       
-      elements.leaderboardList.innerHTML = "";
+  //     elements.leaderboardList.innerHTML = "";
       
-      if (!data.entries || data.entries.length === 0) {
-        const li = document.createElement("li");
-        li.innerText = "No entries yet";
-        elements.leaderboardList.appendChild(li);
-        return;
-      }
+  //     if (!data.entries || data.entries.length === 0) {
+  //       const li = document.createElement("li");
+  //       li.innerText = "No entries yet";
+  //       elements.leaderboardList.appendChild(li);
+  //       return;
+  //     }
       
-      data.entries.sort((a, b) => b.wins - a.wins);
+  //     data.entries.sort((a, b) => b.wins - a.wins);
       
-      data.entries.forEach(entry => {
-        const li = document.createElement("li");
-        li.classList.add(`rank-${entry.rank}`);
-        li.innerHTML = `
-          <span class="player-name" data-player="${Utils.sanitizeHTML(entry.name)}">
-            ${Utils.sanitizeHTML(entry.name)}
-          </span> 
-          <span class="player-stats">
-            Wins: ${entry.wins} | Games: ${entry.games_played} | Win Rate: ${entry.win_ratio}%
-          </span>
-        `;
+  //     data.entries.forEach(entry => {
+  //       const li = document.createElement("li");
+  //       li.classList.add(`rank-${entry.rank}`);
+  //       li.innerHTML = `
+  //         <span class="player-name" data-player="${Utils.sanitizeHTML(entry.name)}">
+  //           ${Utils.sanitizeHTML(entry.name)}
+  //         </span> 
+  //         <span class="player-stats">
+  //           Wins: ${entry.wins} | Games: ${entry.games_played} | Win Rate: ${entry.win_ratio}%
+  //         </span>
+  //       `;
         
-        // Add click event to show player details
-        li.querySelector('.player-name').addEventListener('click', () => showPlayerDetails(entry.name));
+  //       // Add click event to show player details
+  //       li.querySelector('.player-name').addEventListener('click', () => showPlayerDetails(entry.name));
         
-        elements.leaderboardList.appendChild(li);
-      });
-    } catch (error) {
-      console.error("Error fetching leaderboard:", error);
-      elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
-    }
-  }
+  //       elements.leaderboardList.appendChild(li);
+  //     });
+  //   } catch (error) {
+  //     console.error("Error fetching leaderboard:", error);
+  //     elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
+  //   }
+  // }
 
   /**
    * Fetch and display detailed player stats
    * @param {string} playerName - Name of the player to fetch stats for
    */
-  async function showPlayerDetails(playerName) {
-    try {
-      const apiUrl = `${getApiBaseUrl()}/player/${playerName}/`;
-      const response = await fetch(apiUrl);
+  // async function showPlayerDetails(playerName) {
+  //   try {
+  //     const apiUrl = `${getApiBaseUrl()}/player/${playerName}/`;
+  //     const response = await fetch(apiUrl);
       
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-      }
+  //     if (!response.ok) {
+  //       throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+  //     }
       
-      const playerStats = await response.json();
+  //     const playerStats = await response.json();
       
-      // Create a modal or overlay to show detailed stats
-      const statsModal = document.createElement('div');
-      statsModal.className = 'modal player-stats-modal';
-      statsModal.innerHTML = `
-        <div class="modal-content">
-          <h2>${Utils.sanitizeHTML(playerStats.name)}'s Stats</h2>
-          <div class="player-details">
-            <p>Total Games: ${playerStats.games_played}</p>
-            <p>Total Wins: ${playerStats.wins}</p>
-            <p>Win Ratio: ${playerStats.win_ratio}%</p>
-            <p>Rank: <span class="rank-badge rank-${playerStats.rank}">${playerStats.rank.toUpperCase()}</span></p>
-          </div>
-          <button class="close-modal">Close</button>
-        </div>
-      `;
+  //     // Create a modal or overlay to show detailed stats
+  //     const statsModal = document.createElement('div');
+  //     statsModal.className = 'modal player-stats-modal';
+  //     statsModal.innerHTML = `
+  //       <div class="modal-content">
+  //         <h2>${Utils.sanitizeHTML(playerStats.name)}'s Stats</h2>
+  //         <div class="player-details">
+  //           <p>Total Games: ${playerStats.games_played}</p>
+  //           <p>Total Wins: ${playerStats.wins}</p>
+  //           <p>Win Ratio: ${playerStats.win_ratio}%</p>
+  //           <p>Rank: <span class="rank-badge rank-${playerStats.rank}">${playerStats.rank.toUpperCase()}</span></p>
+  //         </div>
+  //         <button class="close-modal">Close</button>
+  //       </div>
+  //     `;
       
-      // Add close functionality
-      statsModal.querySelector('.close-modal').addEventListener('click', () => {
-        statsModal.remove();
-      });
+  //     // Add close functionality
+  //     statsModal.querySelector('.close-modal').addEventListener('click', () => {
+  //       statsModal.remove();
+  //     });
       
-      // Close modal when clicking outside
-      statsModal.addEventListener('click', (e) => {
-        if (e.target === statsModal) {
-          statsModal.remove();
-        }
-      });
+  //     // Close modal when clicking outside
+  //     statsModal.addEventListener('click', (e) => {
+  //       if (e.target === statsModal) {
+  //         statsModal.remove();
+  //       }
+  //     });
       
-      // Add to body
-      document.body.appendChild(statsModal);
-    } catch (error) {
-      console.error("Error fetching player details:", error);
-      Utils.showAlert(`Could not fetch stats for ${playerName}`);
-    }
-  }
+  //     // Add to body
+  //     document.body.appendChild(statsModal);
+  //   } catch (error) {
+  //     console.error("Error fetching player details:", error);
+  //     Utils.showAlert(`Could not fetch stats for ${playerName}`);
+  //   }
+  // }
   
   /**
    * Start the Pong game

@@ -35,7 +35,10 @@ const LocalizationManager = (function() {
       gameMode: "Game mode",
       gamePaused: "Game Paused",
       clickToFullscreen: "Click to enter fullscreen and continue playing",
-      controlsDisabled: "Controls disabled in minimized mode"
+      controlsDisabled: "Controls disabled in minimized mode",
+      privacyPolicy: "Privacy Policy",
+      deleteData: "Delete My Data",
+      verificationRequired: "Verification Required",
     },
     "es": {
       enterName: "Ingrese su Apodo",

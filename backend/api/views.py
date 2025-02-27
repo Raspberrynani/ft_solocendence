@@ -4,14 +4,21 @@ from django.views.decorators.http import require_http_methods
 from django.middleware.csrf import get_token
 from .models import Player
 import json
+import hashlib
+import time
+
 
 @ensure_csrf_cookie
-@require_http_methods(["GET"])
 def get_csrf_token(request):
     """
-    Endpoint to get CSRF token
+    Endpoint to get a CSRF token with proper headers.
+    Ensures the CSRF cookie is set.
     """
-    return JsonResponse({'csrfToken': get_token(request)})
+    token = get_token(request)
+    response = JsonResponse({'csrfToken': token})
+    # Make sure we're sending the CSRF token with proper headers
+    response['X-CSRFToken'] = token
+    return response
 
 @csrf_protect
 @require_http_methods(["GET"])
@@ -95,3 +102,57 @@ def end_game(request):
         return JsonResponse({"error": "Invalid JSON"}, status=400)
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
+    
+# Add these imports to api/views.py
+
+def generate_verification_hash(nickname):
+    """
+    Generate a verification hash based on nickname and current hour
+    This ensures the hash changes every hour for security
+    """
+    # Get current hour as timestamp (changes every hour)
+    current_hour = int(time.time()) // 3600
+    
+    # Create verification string with nickname and hour
+    verification_string = f"{nickname}-{current_hour}-pong-gdpr"
+    
+    # Generate hash
+    hash_object = hashlib.sha256(verification_string.encode())
+    return hash_object.hexdigest()[:12]  # First 12 chars for simplicity
+
+@csrf_protect
+@require_http_methods(["POST"])
+def delete_player_data(request):
+    """
+    Delete a player's data after verification
+    """
+    try:
+        data = json.loads(request.body)
+        nickname = data.get("nickname")
+        verification_code = data.get("verification_code")
+        
+        # Verify the nickname exists
+        try:
+            player = Player.objects.get(name=nickname)
+        except Player.DoesNotExist:
+            # We return success even if player doesn't exist for security
+            return JsonResponse({"success": True, "message": "If this player exists, their data has been deleted."})
+        
+        # Generate the expected verification hash
+        expected_hash = generate_verification_hash(nickname)
+        
+        # Check if verification matches
+        if verification_code != expected_hash:
+            return JsonResponse({"success": False, "message": "Verification failed."}, status=400)
+        
+        # Delete player data
+        player.delete()
+        
+        return JsonResponse({
+            "success": True,
+            "message": "Player data has been permanently deleted."
+        })
+    except json.JSONDecodeError:
+        return JsonResponse({"success": False, "message": "Invalid JSON."}, status=400)
+    except Exception as e:
+        return JsonResponse({"success": False, "message": str(e)}, status=500)
