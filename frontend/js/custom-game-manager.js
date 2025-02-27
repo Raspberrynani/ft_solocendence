@@ -17,7 +17,7 @@ const CustomGameManager = (function() {
     
     // Special presets
     const presets = {
-      speedemon: {
+      speed: {
         ballSpeed: 8,
         paddleSize: 80,
         speedIncrement: 1.0,
@@ -148,7 +148,7 @@ const CustomGameManager = (function() {
       
       // Apply code button
       elements.applyCode.addEventListener('click', function() {
-        applyGameCode(elements.gameCode.value);
+        applyGameCode(elements.gameCode.value.trim());
       });
       
       // Generate code button
@@ -218,20 +218,32 @@ const CustomGameManager = (function() {
     }
     
     /**
-     * Generate a game code based on settings
+     * Generate a concise game code based on settings
      * @param {Object} settings - Game settings to encode
      * @returns {string} - Encoded game code
      */
     function generateGameCode(settings) {
-      // Convert settings to a base64 string
-      const settingsJSON = JSON.stringify(settings);
-      const encodedSettings = btoa(settingsJSON);
+      // Create a simple encoding using first letters of key settings
+      const code = [
+        // Speed - first character of preset or number
+        Object.keys(presets).find(key => 
+          presets[key].ballSpeed === settings.ballSpeed
+        )?.charAt(0) || Math.round(settings.ballSpeed).toString(),
+        
+        // Paddle size 
+        Math.round(settings.paddleSize / 50).toString(),
+        
+        // Gravity (G) or Normal (N)
+        settings.gravityEnabled ? 'G' : 'N',
+        
+        // Random bounce (R) or Normal (N)
+        settings.bounceRandom ? 'R' : 'N',
+        
+        // Color first letter of main color
+        settings.ballColor.replace('#', '').substr(0, 1).toUpperCase()
+      ].join('');
       
-      // Create a shorter version by taking parts of the string
-      // This is for demonstration - in a real app you might want a more robust method
-      const shortCode = encodedSettings.substring(0, 12);
-      
-      return `PG-${shortCode}`;
+      return code.toUpperCase();
     }
     
     /**
@@ -240,54 +252,74 @@ const CustomGameManager = (function() {
      * @returns {boolean} - Whether code was successfully applied
      */
     function applyGameCode(code) {
-      // First check for built-in presets
-      const presetNames = Object.keys(presets);
-      for (const name of presetNames) {
-        if (code.toLowerCase() === name.toLowerCase()) {
-          applyPreset(name);
+      if (!code) return false;
+      
+      code = code.toUpperCase();
+      
+      // First, check predefined presets by name
+      const presetKeys = Object.keys(presets);
+      for (const preset of presetKeys) {
+        if (code === preset.charAt(0).toUpperCase()) {
+          applyPreset(preset);
           return true;
         }
       }
       
-      // Try to parse as a game code
+      // If not a preset, try parsing the detailed code
       try {
-        // Check if it starts with our prefix
-        if (!code.startsWith('PG-')) {
-          throw new Error('Invalid code format');
-        }
+        const [speed, paddleSize, gravity, bounce, color] = code.split('');
         
-        // Extract the encoded part
-        const encodedPart = code.substring(3);
+        // Speed mapping
+        const speedMap = {
+          'S': 8,   // Speed preset
+          'R': 3,   // Retro preset
+          'G': 5,   // Giant preset
+          'M': 3,   // Micro preset
+          'C': 7,   // Chaos preset
+          '3': 3,
+          '4': 4,
+          '5': 5,
+          '6': 6,
+          '7': 7,
+          '8': 8
+        };
+        currentSettings.ballSpeed = speedMap[speed] || 4;
         
-        // For this demo, we'll use a simple decoder
-        // In a real app, you might want something more robust
-        // This is just for demonstration purposes
+        // Paddle size mapping
+        const paddleSizeMap = {
+          '1': 50,
+          '2': 100,
+          '3': 150,
+          '4': 200
+        };
+        currentSettings.paddleSize = paddleSizeMap[paddleSize] || 100;
         
-        // Instead of trying to decode an actual base64 that we encoded earlier,
-        // we'll recognize specific codes
-        if (encodedPart === '12345') {
-          applyPreset('speedemon');
-          return true;
-        } else if (encodedPart === '67890') {
-          applyPreset('retro');
-          return true;
-        } else if (encodedPart === 'abcde') {
-          applyPreset('giant');
-          return true;
-        } else if (encodedPart === 'fghij') {
-          applyPreset('micro');
-          return true;
-        } else if (encodedPart === 'klmno') {
-          applyPreset('chaos');
-          return true;
-        }
+        // Gravity mapping
+        currentSettings.gravityEnabled = gravity === 'G';
         
-        // If we got here, it's an unrecognized code
-        throw new Error('Unrecognized game code');
+        // Bounce mapping
+        currentSettings.bounceRandom = bounce === 'R';
         
+        // Color mapping (very basic - just changes to a preset color)
+        const colorMap = {
+          'F': '#ff4500',  // Fire Red
+          'B': '#0000ff',  // Blue
+          'G': '#00ff00',  // Green
+          'W': '#ffffff',  // White
+          'Y': '#ffff00'   // Yellow
+        };
+        currentSettings.ballColor = colorMap[color] || '#00d4ff';
+        
+        // Update UI to reflect new settings
+        updateUIFromSettings(currentSettings);
+        
+        // Highlight the code input
+        highlightElement(elements.gameCode);
+        
+        return true;
       } catch (error) {
-        console.error('Error applying game code:', error);
-        alert('Invalid game code. Try one of our presets instead!');
+        console.error("Error parsing game code:", error);
+        Utils.showAlert("Invalid game code. Try a preset or check the format.");
         return false;
       }
     }
@@ -325,6 +357,7 @@ const CustomGameManager = (function() {
       getSettings,
       applyPreset,
       applyGameCode,
+      generateGameCode,
       resetSettings
     };
-  })();
+})();
