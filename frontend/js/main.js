@@ -2,7 +2,21 @@
  * Main application entry point
  * Initializes and coordinates game modules
  */
+
+async function fetchCsrfToken() {
+  try {
+    const response = await fetch('/api/csrf/');
+    const data = await response.json();
+    document.cookie = `csrftoken=${data.csrfToken}; path=/`;
+    return data.csrfToken;
+  } catch (error) {
+    console.error('Failed to fetch CSRF token:', error);
+    return null;
+  }
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  fetchCsrfToken();
   // Ensure cookies have secure attributes when on HTTPS
   function setupSecureCookies() {
     if (window.location.protocol === 'https:') {
@@ -692,12 +706,75 @@ document.addEventListener("DOMContentLoaded", () => {
       
       data.entries.forEach(entry => {
         const li = document.createElement("li");
-        li.innerText = `${Utils.sanitizeHTML(entry.name)} - Wins: ${entry.wins}`;
+        li.classList.add(`rank-${entry.rank}`);
+        li.innerHTML = `
+          <span class="player-name" data-player="${Utils.sanitizeHTML(entry.name)}">
+            ${Utils.sanitizeHTML(entry.name)}
+          </span> 
+          <span class="player-stats">
+            Wins: ${entry.wins} | Games: ${entry.games_played} | Win Rate: ${entry.win_ratio}%
+          </span>
+        `;
+        
+        // Add click event to show player details
+        li.querySelector('.player-name').addEventListener('click', () => showPlayerDetails(entry.name));
+        
         elements.leaderboardList.appendChild(li);
       });
     } catch (error) {
       console.error("Error fetching leaderboard:", error);
       elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
+    }
+  }
+
+  /**
+   * Fetch and display detailed player stats
+   * @param {string} playerName - Name of the player to fetch stats for
+   */
+  async function showPlayerDetails(playerName) {
+    try {
+      const apiUrl = `${getApiBaseUrl()}/player/${playerName}/`;
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
+      const playerStats = await response.json();
+      
+      // Create a modal or overlay to show detailed stats
+      const statsModal = document.createElement('div');
+      statsModal.className = 'modal player-stats-modal';
+      statsModal.innerHTML = `
+        <div class="modal-content">
+          <h2>${Utils.sanitizeHTML(playerStats.name)}'s Stats</h2>
+          <div class="player-details">
+            <p>Total Games: ${playerStats.games_played}</p>
+            <p>Total Wins: ${playerStats.wins}</p>
+            <p>Win Ratio: ${playerStats.win_ratio}%</p>
+            <p>Rank: <span class="rank-badge rank-${playerStats.rank}">${playerStats.rank.toUpperCase()}</span></p>
+          </div>
+          <button class="close-modal">Close</button>
+        </div>
+      `;
+      
+      // Add close functionality
+      statsModal.querySelector('.close-modal').addEventListener('click', () => {
+        statsModal.remove();
+      });
+      
+      // Close modal when clicking outside
+      statsModal.addEventListener('click', (e) => {
+        if (e.target === statsModal) {
+          statsModal.remove();
+        }
+      });
+      
+      // Add to body
+      document.body.appendChild(statsModal);
+    } catch (error) {
+      console.error("Error fetching player details:", error);
+      Utils.showAlert(`Could not fetch stats for ${playerName}`);
     }
   }
   
@@ -775,6 +852,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Stop the game
     PongGame.stop();
+
+    const csrftoken = await fetchCsrfToken();
     
     // For multiplayer mode, report score to server
     if (appState.isMultiplayer) {
@@ -788,17 +867,25 @@ document.addEventListener("DOMContentLoaded", () => {
           method: "POST",
           headers: { 
             "Content-Type": "application/json",
-            "X-CSRFToken": Utils.getCsrfToken()
+            "X-CSRFToken": csrftoken
           },
           body: JSON.stringify({ 
             nickname: appState.nickname, 
             token: appState.token, 
-            score: appState.roundsPlayed 
-          })
+            score: appState.roundsPlayed,
+            totalRounds: appState.targetRounds
+          }),
+          credentials: 'include'
         });
         
         if (response.ok) {
-          Utils.showToast(LocalizationManager.get("gameEnded"), "success");
+          const result = await response.json();
+          Utils.showToast(
+            result.winner 
+              ? LocalizationManager.get("gameWon") 
+              : LocalizationManager.get("gameLost"), 
+            result.winner ? "success" : "warning"
+          );
         } else {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
           Utils.showToast(`${LocalizationManager.get("failedToRecord")}: ${errorData.error || response.statusText}`, "error");
@@ -834,6 +921,104 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Navigate to leaderboard
     UIManager.navigateTo("leaderboard-page");
+  }async function updateLeaderboard() {
+    try {
+      Utils.showLoading(elements.leaderboardList);
+      
+      const apiUrl = `${getApiBaseUrl()}/entries/`;
+      console.log("Fetching leaderboard from:", apiUrl);
+      
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      elements.leaderboardList.innerHTML = "";
+      
+      if (!data.entries || data.entries.length === 0) {
+        const li = document.createElement("li");
+        li.innerText = "No entries yet";
+        elements.leaderboardList.appendChild(li);
+        return;
+      }
+      
+      data.entries.sort((a, b) => b.wins - a.wins);
+      
+      data.entries.forEach(entry => {
+        const li = document.createElement("li");
+        li.classList.add(`rank-${entry.rank}`);
+        li.innerHTML = `
+          <span class="player-name" data-player="${Utils.sanitizeHTML(entry.name)}">
+            ${Utils.sanitizeHTML(entry.name)}
+          </span> 
+          <span class="player-stats">
+            Wins: ${entry.wins} | Games: ${entry.games_played} | Win Rate: ${entry.win_ratio}%
+          </span>
+        `;
+        
+        // Add click event to show player details
+        li.querySelector('.player-name').addEventListener('click', () => showPlayerDetails(entry.name));
+        
+        elements.leaderboardList.appendChild(li);
+      });
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
+    }
+  }
+
+  /**
+   * Fetch and display detailed player stats
+   * @param {string} playerName - Name of the player to fetch stats for
+   */
+  async function showPlayerDetails(playerName) {
+    try {
+      const apiUrl = `${getApiBaseUrl()}/player/${playerName}/`;
+      const response = await fetch(apiUrl);
+      
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
+      
+      const playerStats = await response.json();
+      
+      // Create a modal or overlay to show detailed stats
+      const statsModal = document.createElement('div');
+      statsModal.className = 'modal player-stats-modal';
+      statsModal.innerHTML = `
+        <div class="modal-content">
+          <h2>${Utils.sanitizeHTML(playerStats.name)}'s Stats</h2>
+          <div class="player-details">
+            <p>Total Games: ${playerStats.games_played}</p>
+            <p>Total Wins: ${playerStats.wins}</p>
+            <p>Win Ratio: ${playerStats.win_ratio}%</p>
+            <p>Rank: <span class="rank-badge rank-${playerStats.rank}">${playerStats.rank.toUpperCase()}</span></p>
+          </div>
+          <button class="close-modal">Close</button>
+        </div>
+      `;
+      
+      // Add close functionality
+      statsModal.querySelector('.close-modal').addEventListener('click', () => {
+        statsModal.remove();
+      });
+      
+      // Close modal when clicking outside
+      statsModal.addEventListener('click', (e) => {
+        if (e.target === statsModal) {
+          statsModal.remove();
+        }
+      });
+      
+      // Add to body
+      document.body.appendChild(statsModal);
+    } catch (error) {
+      console.error("Error fetching player details:", error);
+      Utils.showAlert(`Could not fetch stats for ${playerName}`);
+    }
   }
   
   /**
