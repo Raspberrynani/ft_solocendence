@@ -17,7 +17,7 @@ def get_entries(request):
     data = [{"name": p.name, "wins": p.wins} for p in players]
     return JsonResponse({"entries": data})
 
-@csrf_exempt
+# @csrf_exempt
 @require_http_methods(["POST"])
 def end_game(request):
     """

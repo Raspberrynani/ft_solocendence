@@ -30,9 +30,9 @@ services:
       - ./certs:/app/certs:ro
       - ./backend:/app
     environment:
-      - SSL_ENABLED=false  # Set to true when certificates are ready
-      - SSL_CERT_FILE=/app/certs/cert.pem
-      - SSL_KEY_FILE=/app/certs/key.pem
+      - SSL_ENABLED=true  # Set to true when certificates are ready
+      - SSL_CERT_FILE=./certs/cert.pem
+      - SSL_KEY_FILE=./certs/key.pem
       - DB_HOST=db
       - DB_PORT=5432
       - POSTGRES_DB=pongdb

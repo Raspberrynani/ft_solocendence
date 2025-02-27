@@ -3,6 +3,108 @@
  * Initializes and coordinates game modules
  */
 document.addEventListener("DOMContentLoaded", () => {
+  // Ensure cookies have secure attributes when on HTTPS
+  function setupSecureCookies() {
+    if (window.location.protocol === 'https:') {
+      document.cookie = "secureOnly=true; secure; SameSite=Strict";
+    }
+  }
+  
+  // Setup secure cookies
+  setupSecureCookies();
+
+
+  // -----------------------------
+  // DevTools Detection & Fair Play Warning
+  // -----------------------------
+  
+  // Create the warning overlay element
+  function createFairPlayWarning() {
+    const warning = document.createElement('div');
+    warning.className = 'fair-play-warning';
+    warning.innerHTML = `
+      <h2>⚠️ Fair Play Warning ⚠️</h2>
+      <p>We've detected that you may be attempting to inspect or modify the game.</p>
+      <p>Tampering with game code violates fair play principles and may affect other players' experience.</p>
+      <button>I understand - Continue Playing</button>
+    `;
+    
+    // Add click handler to dismiss
+    warning.addEventListener('click', () => {
+      warning.remove();
+    });
+    
+    return warning;
+  }
+  
+  // Show the fair play warning
+  function showFairPlayWarning() {
+    // Only show if not already displayed
+    if (!document.querySelector('.fair-play-warning')) {
+      document.body.appendChild(createFairPlayWarning());
+    }
+  }
+  
+  // DevTools detection methods
+  let devToolsTimeout;
+  let isDevToolsOpen = false;
+  
+  // Method 1: Console overriding detection
+  const devToolsDetector = () => {
+    const timestamp = new Date().getTime();
+    debugger; // This will pause execution in DevTools
+    if (new Date().getTime() - timestamp > 100) {
+      // If execution took too long, DevTools is likely open
+      showFairPlayWarning();
+      return true;
+    }
+    return false;
+  };
+  
+  // Method 2: Window size change detection
+  function checkWindowChanges() {
+    const threshold = 160;
+    const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+    const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+    
+    if (widthThreshold || heightThreshold) {
+      if (!isDevToolsOpen) {
+        isDevToolsOpen = true;
+        showFairPlayWarning();
+      }
+    } else {
+      isDevToolsOpen = false;
+    }
+  }
+  
+  // Method 3: DevTools orientation detection
+  function orientationChange() {
+    // Wait for resize to complete
+    clearTimeout(devToolsTimeout);
+    devToolsTimeout = setTimeout(checkWindowChanges, 100);
+  }
+  
+  // Set up event listeners for DevTools detection
+  window.addEventListener('resize', orientationChange);
+  
+  // Run periodic check during gameplay
+  function setupDevToolsChecks() {
+    if (appState && appState.gameActive) {
+      // Only run checks during active gameplay
+      if (!devToolsDetector()) {
+        checkWindowChanges();
+      }
+      setTimeout(setupDevToolsChecks, 1000); // Check every second
+    }
+  }
+  
+  // Start monitoring when game becomes active
+  const originalStartPongGame = startPongGame;
+  startPongGame = function() {
+    originalStartPongGame.apply(this, arguments);
+    setupDevToolsChecks();
+  };
+  
   // -----------------------------
   // 1) Grab UI elements up front
   // -----------------------------
@@ -74,8 +176,6 @@ document.addEventListener("DOMContentLoaded", () => {
       onLanguageChange: handleLanguageChange
     }
   });
-
-  
   
   // Initialize websocket with callbacks
   WebSocketManager.init({
@@ -111,6 +211,18 @@ document.addEventListener("DOMContentLoaded", () => {
     UIManager.toggleStartButton(elements.nicknameInput.value.trim().length > 0);
   });
   
+  // Set up navigation buttons
+  document.getElementById('next-button').addEventListener('click', () => {
+    UIManager.navigateTo('game-page');
+  });
+
+  // Find and fix all other navigation buttons
+  document.querySelectorAll('[data-navigate]').forEach(button => {
+    button.addEventListener('click', () => {
+      UIManager.navigateTo(button.getAttribute('data-navigate'));
+    });
+  });
+
   // Game mode selection
   elements.prevModeButton.addEventListener("click", () => {
     appState.currentGameModeIndex = (appState.currentGameModeIndex - 1 + gameModes.length) % gameModes.length;
@@ -162,6 +274,35 @@ document.addEventListener("DOMContentLoaded", () => {
   // -----------------------------
   
   /**
+   * Validate user input
+   * @param {string} nickname - User's nickname
+   * @param {string|number} rounds - Number of rounds
+   * @returns {boolean} - Whether input is valid
+   */
+  function validateInput(nickname, rounds) {
+    if (!nickname || nickname.trim().length === 0) {
+      Utils.showAlert(LocalizationManager.get("nicknameRequired"));
+      return false;
+    }
+    
+    // More thorough nickname validation (alphanumeric + some special chars)
+    const validNickname = /^[A-Za-z0-9_-]{1,16}$/;
+    if (!validNickname.test(nickname)) {
+      Utils.showAlert("Nickname must be 1-16 characters with only letters, numbers, underscore or hyphen.");
+      return false;
+    }
+    
+    // Validate rounds as number within range
+    const roundsNum = parseInt(rounds);
+    if (isNaN(roundsNum) || roundsNum < 1 || roundsNum > 20) {
+      Utils.showAlert("Rounds must be a number between 1 and 20.");
+      return false;
+    }
+    
+    return true;
+  }
+  
+  /**
    * Handle page change events
    * @param {string} pageId - ID of the target page
    */
@@ -191,7 +332,7 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function handleSocketDisconnect() {
     console.log("WebSocket disconnected from server");
-    Utils.showToast("Lost connection to server. Attempting to reconnect...", "warning");
+    Utils.showToast(LocalizationManager.get("connectionError"), "warning");
   }
   
   /**
@@ -200,14 +341,14 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function handleSocketError(error) {
     console.error("WebSocket error:", error);
-    Utils.showToast("Connection error. Please check your internet connection.", "error");
+    Utils.showToast(LocalizationManager.get("connectionError"), "error");
   }
   
   /**
    * Handle failed reconnection attempts
    */
   function handleReconnectFailed() {
-    Utils.showToast("Could not reconnect to server. Please refresh the page.", "error");
+    Utils.showToast(LocalizationManager.get("reconnectFailed"), "error");
   }
   
   /**
@@ -295,7 +436,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
     if (!waitingList || waitingList.length === 0) {
       const li = document.createElement("li");
-      li.innerText = "No players waiting";
+      li.innerText = LocalizationManager.get("noPlayersWaiting");
       li.classList.add("no-players");
       elements.waitingPlayersList.appendChild(li);
       return;
@@ -304,7 +445,7 @@ document.addEventListener("DOMContentLoaded", () => {
     waitingList.forEach(player => {
       const li = document.createElement("li");
       li.className = "list-group-item clickable-player";
-      li.innerHTML = `<span class="player-name">${player.nickname}</span> <span class="player-rounds">(Rounds: ${player.rounds})</span>`;
+      li.innerHTML = `<span class="player-name">${Utils.sanitizeHTML(player.nickname)}</span> <span class="player-rounds">(${LocalizationManager.get("rounds")}: ${player.rounds})</span>`;
       
       // Add click handler
       li.onclick = function() {
@@ -362,14 +503,13 @@ document.addEventListener("DOMContentLoaded", () => {
    */
   function handleStartGame() {
     const nickname = elements.nicknameInput.value.trim();
-    if (!nickname) {
-      Utils.showAlert("Please enter a nickname!");
-      return;
-    }
+    const rounds = elements.roundsInput.value;
     
-    const validNickname = /^[A-Za-z]{1,16}$/;
-    if (!validNickname.test(nickname)) {
-      Utils.showAlert("This nickname is too cool to be used here!");
+    if (devToolsDetector()) {
+      showFairPlayWarning();
+    }
+
+    if (!validateInput(nickname, rounds)) {
       return;
     }
     
@@ -377,11 +517,11 @@ document.addEventListener("DOMContentLoaded", () => {
     appState.nickname = nickname;
     appState.token = Utils.generateToken();
     appState.roundsPlayed = 0;
-    appState.targetRounds = parseInt(elements.roundsInput.value) || 3;
+    appState.targetRounds = parseInt(rounds) || 3;
     
-    // Update UI
-    elements.playerNameDisplay.innerText = nickname;
-    elements.playerName.innerText = nickname;
+    // Update UI with sanitized values
+    elements.playerNameDisplay.innerText = Utils.sanitizeHTML(nickname);
+    elements.playerName.innerText = Utils.sanitizeHTML(nickname);
     elements.overlayScoreDisplay.innerText = appState.roundsPlayed;
     elements.playerRounds.innerText = appState.roundsPlayed;
     elements.targetRounds.innerText = appState.targetRounds;
@@ -411,7 +551,7 @@ document.addEventListener("DOMContentLoaded", () => {
         UIManager.navigateTo("pong-page");
         elements.pongStatus.innerText = LocalizationManager.get("waitingQueue");
       } else {
-        Utils.showAlert("Not connected to server. Please refresh the page.");
+        Utils.showAlert(LocalizationManager.get("connectionError"));
       }
     }
   }
@@ -447,7 +587,7 @@ document.addEventListener("DOMContentLoaded", () => {
       
       data.entries.forEach(entry => {
         const li = document.createElement("li");
-        li.innerText = `${entry.name} - Wins: ${entry.wins}`;
+        li.innerText = `${Utils.sanitizeHTML(entry.name)} - Wins: ${entry.wins}`;
         elements.leaderboardList.appendChild(li);
       });
     } catch (error) {
@@ -541,7 +681,10 @@ document.addEventListener("DOMContentLoaded", () => {
         
         const response = await fetch(apiUrl, {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: { 
+            "Content-Type": "application/json",
+            "X-CSRFToken": Utils.getCsrfToken()
+          },
           body: JSON.stringify({ 
             nickname: appState.nickname, 
             token: appState.token, 
@@ -550,14 +693,14 @@ document.addEventListener("DOMContentLoaded", () => {
         });
         
         if (response.ok) {
-          Utils.showToast("Game ended and win recorded!", "success");
+          Utils.showToast(LocalizationManager.get("gameEnded"), "success");
         } else {
           const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          Utils.showToast(`Failed to record win: ${errorData.error || response.statusText}`, "error");
+          Utils.showToast(`${LocalizationManager.get("failedToRecord")}: ${errorData.error || response.statusText}`, "error");
         }
       } catch (error) {
         console.error("Error ending game:", error);
-        Utils.showToast("Error connecting to server", "error");
+        Utils.showToast(LocalizationManager.get("connectionError"), "error");
       }
     }
     
