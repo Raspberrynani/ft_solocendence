@@ -136,9 +136,31 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Lists
     leaderboardList: document.getElementById("leaderboard"),
-    waitingPlayersList: document.getElementById("waiting-players-list")
+    waitingPlayersList: document.getElementById("waiting-players-list"),
+
+    // Custom game elements
+    customGamePage: document.getElementById("custom-game-page"),
+    ballSpeed: document.getElementById("ball-speed"),
+    ballSpeedValue: document.getElementById("ball-speed-value"),
+    paddleSize: document.getElementById("paddle-size"),
+    paddleSizeValue: document.getElementById("paddle-size-value"),
+    speedIncrement: document.getElementById("speed-increment"),
+    speedIncrementValue: document.getElementById("speed-increment-value"),
+    ballColor: document.getElementById("ball-color"),
+    leftPaddleColor: document.getElementById("left-paddle-color"),
+    rightPaddleColor: document.getElementById("right-paddle-color"),
+    gravityEnabled: document.getElementById("gravity-enabled"),
+    bounceRandom: document.getElementById("bounce-random"),
+    gameCode: document.getElementById("game-code"),
+    applyCode: document.getElementById("apply-code"),
+    generateCode: document.getElementById("generate-code"),
+    copyCode: document.getElementById("copy-code"),
+    startCustomGame: document.getElementById("start-custom-game")
+
   };
   
+  CustomGameManager.init(elements);
+
   function getApiBaseUrl() {
     // Use the same protocol and host as the current page
     const protocol = window.location.protocol;
@@ -162,7 +184,7 @@ document.addEventListener("DOMContentLoaded", () => {
   };
   
   // Available game modes
-  const gameModes = ["Classic with queue", "Classic with AI", "Unimplemented"];
+  const gameModes = ["Classic with queue", "Classic with AI", "Custom Game"];
   
   // -----------------------------
   // 2) Initialize modules
@@ -508,7 +530,7 @@ document.addEventListener("DOMContentLoaded", () => {
     if (devToolsDetector()) {
       showFairPlayWarning();
     }
-
+  
     if (!validateInput(nickname, rounds)) {
       return;
     }
@@ -530,9 +552,9 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectedMode = gameModes[appState.currentGameModeIndex];
     
     // Handle different game modes
-    if (selectedMode === "Unimplemented") {
-      Utils.showAlert("This game mode is not yet implemented!");
-      return;
+    if (selectedMode === "Custom Game") {
+      // Navigate to custom game page instead of starting game
+      UIManager.navigateTo("custom-game-page");
     } else if (selectedMode === "Classic with AI") {
       appState.isMultiplayer = false;
       UIManager.navigateTo("pong-page");
@@ -556,6 +578,89 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   
+  // Add event listener for Start Custom Game button
+  elements.startCustomGame.addEventListener("click", function() {
+    appState.isMultiplayer = false; // Custom games are single player for now
+    
+    // Get custom settings
+    const customSettings = CustomGameManager.getSettings();
+    
+    // Navigate to pong page
+    UIManager.navigateTo("pong-page");
+    elements.pongStatus.innerText = "Custom Game Mode";
+    
+    // Start game with custom settings
+    startCustomGameWithSettings(customSettings);
+  });
+  
+  function startCustomGameWithSettings(customSettings) {
+    // Set game as active
+    appState.gameActive = true;
+    
+    // Reset game state
+    appState.gameOverHandled = false;
+    appState.roundsPlayed = 0;
+    
+    // Update UI
+    elements.endGameButton.classList.remove("hidden");
+    elements.playerRounds.innerText = appState.roundsPlayed;
+    
+    // Setup canvas styling
+    elements.pongCanvas.style.width = '100%';
+    elements.pongCanvas.style.height = 'auto';
+    elements.pongCanvas.classList.remove("crt-zoom");
+    
+    // Try to enter fullscreen
+    enterFullscreen(elements.pongCanvas);
+    
+    // Allow a short delay for fullscreen to complete
+    setTimeout(() => {
+      // Initialize and start game with custom settings
+      PongGame.init({
+        canvasId: 'pong-canvas',
+        isMultiplayer: appState.isMultiplayer,
+        nickname: appState.nickname,
+        token: appState.token,
+        rounds: appState.targetRounds,
+        // Add custom settings
+        initialBallSpeed: customSettings.ballSpeed,
+        speedIncrement: customSettings.speedIncrement,
+        paddleSizeMultiplier: customSettings.paddleSize,
+        ballColor: customSettings.ballColor,
+        leftPaddleColor: customSettings.leftPaddleColor,
+        rightPaddleColor: customSettings.rightPaddleColor,
+        gravityEnabled: customSettings.gravityEnabled,
+        bounceRandom: customSettings.bounceRandom,
+        // Callbacks
+        callbacks: {
+          onRoundComplete: (roundsPlayed) => {
+            appState.roundsPlayed = roundsPlayed;
+            elements.overlayScoreDisplay.innerText = roundsPlayed;
+            elements.playerRounds.innerText = roundsPlayed;
+          },
+          onGameOver: (score) => {
+            handleGameOver(score);
+          },
+          onPaddleMove: (paddleY) => {
+            // Send paddle position to server in multiplayer mode
+            if (appState.isMultiplayer) {
+              WebSocketManager.sendPaddleUpdate(paddleY);
+            }
+          },
+          onFullscreenChange: (isFullscreen) => {
+            // Update control enabled state based on fullscreen
+          }
+        }
+      });
+      
+      PongGame.start();
+      
+      // Apply "CRT zoom" effect for visual flair
+      void elements.pongCanvas.offsetWidth; // Force reflow
+      elements.pongCanvas.classList.add("crt-zoom");
+    }, 100);
+  }
+
   /**
    * Fetch and update the leaderboard
    */

@@ -22,7 +22,15 @@ const PongGame = (function() {
     currentRounds: 0,
     speedIncrement: 0.5,
     paddleSpeed: 4.5,
-    initialBallSpeed: 4
+    initialBallSpeed: 4,
+    // Add new properties for custom game
+    paddleSizeMultiplier: 1.0,  // Default 100%
+    ballColor: '#00d4ff',
+    leftPaddleColor: '#007bff',
+    rightPaddleColor: '#ff758c',
+    gravityEnabled: false,
+    gravityStrength: 0.1,
+    bounceRandom: false
   };
   
   // References to player data and WebSocket
@@ -37,7 +45,7 @@ const PongGame = (function() {
   /**
    * Initialize the game canvas and setup
    * @param {Object} config - Game configuration object
-   */
+  */
   function init(config = {}) {
     // Merge provided config with defaults
     gameConfig = { ...gameConfig, ...config };
@@ -139,6 +147,9 @@ const PongGame = (function() {
     // Calculate dimensions based on canvas size
     updateGameDimensions(true); // Force update with reset
     
+    // Apply paddle size multiplier
+    paddleHeight = paddleHeight * (gameConfig.paddleSizeMultiplier / 100);
+    
     // Reset paddles
     leftPaddle = { 
       x: paddleWidth * 2, 
@@ -149,7 +160,7 @@ const PongGame = (function() {
       x: canvas.width - (paddleWidth * 3), 
       y: canvas.height / 2 - paddleHeight / 2 
     };
-
+  
     // Reset ball with random angle
     resetBall();
   }
@@ -393,14 +404,31 @@ const PongGame = (function() {
    * @param {number} deltaFactor - Normalized time factor
    */
   function update(deltaFactor = 1) {
+
+    
     // Move ball
     ball.x += ball.vx * deltaFactor;
     ball.y += ball.vy * deltaFactor;
+
+    // Apply gravity if enabled
+    if (gameConfig.gravityEnabled) {
+      ball.vy += gameConfig.gravityStrength * deltaFactor;
+    }
+
     
     // Wall collision (top/bottom)
     if (ball.y - ball.radius < 0 || ball.y + ball.radius > canvas.height) {
       ball.vy = -ball.vy;
       
+      if (gameConfig.bounceRandom) {
+        const randomFactor = 0.3; // Maximum 30% variation
+        ball.vy += (Math.random() * 2 - 1) * ball.speed * randomFactor;
+        
+        // Make sure the ball doesn't get stuck moving horizontally
+        if (Math.abs(ball.vy) < ball.speed * 0.2) {
+          ball.vy = (ball.vy > 0 ? 1 : -1) * ball.speed * 0.2;
+        }
+      }
       // Keep ball in bounds
       if (ball.y - ball.radius < 0) {
         ball.y = ball.radius;
@@ -610,7 +638,6 @@ const PongGame = (function() {
     ctx.setLineDash([]);
     
     // Calculate appropriate font size based on canvas width
-    // Use a smaller font size to avoid overcrowding
     const fontSize = Math.max(12, Math.min(24, Math.floor(canvas.width / 40)));
     
     // Draw score
@@ -633,7 +660,7 @@ const PongGame = (function() {
     }
     
     // Draw ball
-    ctx.fillStyle = '#00d4ff';
+    ctx.fillStyle = gameConfig.ballColor;
     ctx.beginPath();
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fill();
@@ -642,11 +669,11 @@ const PongGame = (function() {
     const cornerRadius = Math.min(8, paddleWidth / 2);
     
     // Draw left paddle
-    ctx.fillStyle = '#007bff';
+    ctx.fillStyle = gameConfig.leftPaddleColor;
     drawRoundedRect(leftPaddle.x, leftPaddle.y, paddleWidth, paddleHeight, cornerRadius);
     
     // Draw right paddle
-    ctx.fillStyle = '#ff758c';
+    ctx.fillStyle = gameConfig.rightPaddleColor;
     drawRoundedRect(rightPaddle.x, rightPaddle.y, paddleWidth, paddleHeight, cornerRadius);
     
     // If control is disabled (minimized mode), show a notification
