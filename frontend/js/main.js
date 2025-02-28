@@ -841,7 +841,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Start the Pong game
    */
-  function startPongGame() {
+  function startPongGame(customSettings = null) {
     // Set game as active
     appState.gameActive = true;
     
@@ -854,7 +854,6 @@ document.addEventListener("DOMContentLoaded", () => {
     elements.playerRounds.innerText = appState.roundsPlayed;
     
     // Setup canvas styling
-    // Important: Remove any styling that constrains the canvas size
     elements.pongCanvas.style.width = '100%';
     elements.pongCanvas.style.height = 'auto';
     elements.pongCanvas.classList.remove("crt-zoom");
@@ -864,8 +863,8 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Allow a short delay for fullscreen to complete
     setTimeout(() => {
-      // Initialize and start game
-      PongGame.init({
+      // Prepare game initialization options
+      const gameInitOptions = {
         canvasId: 'pong-canvas',
         isMultiplayer: appState.isMultiplayer,
         nickname: appState.nickname,
@@ -886,12 +885,52 @@ document.addEventListener("DOMContentLoaded", () => {
               WebSocketManager.sendPaddleUpdate(paddleY);
             }
           },
+          onGameStart: () => {
+            // Initialize mobile joystick if on mobile device
+            if (Utils.isMobileDevice()) {
+              const canvas = document.getElementById('pong-canvas');
+              MobileJoystick.init(canvas, (paddleY) => {
+                // Update local paddle and send to server if multiplayer
+                PongGame.updateLocalPaddle(paddleY);
+                if (appState.isMultiplayer) {
+                  WebSocketManager.sendPaddleUpdate(paddleY);
+                }
+              });
+            }
+          },
+          onGameEnd: () => {
+            // Destroy mobile joystick when game ends
+            if (Utils.isMobileDevice()) {
+              MobileJoystick.destroy();
+            }
+          },
           onFullscreenChange: (isFullscreen) => {
             // Update control enabled state based on fullscreen
-            // No need to pause the game
+            if (Utils.isMobileDevice() && !isFullscreen) {
+              // Recreate joystick if needed
+              const canvas = document.getElementById('pong-canvas');
+              MobileJoystick.init(canvas);
+            }
           }
         }
-      });
+      };
+
+      // If custom settings are provided, add them to the initialization options
+      if (customSettings) {
+        Object.assign(gameInitOptions, {
+          initialBallSpeed: customSettings.ballSpeed,
+          speedIncrement: customSettings.speedIncrement,
+          paddleSizeMultiplier: customSettings.paddleSize,
+          ballColor: customSettings.ballColor,
+          leftPaddleColor: customSettings.leftPaddleColor,
+          rightPaddleColor: customSettings.rightPaddleColor,
+          gravityEnabled: customSettings.gravityEnabled,
+          bounceRandom: customSettings.bounceRandom
+        });
+      }
+      
+      // Initialize and start game
+      PongGame.init(gameInitOptions);
       
       PongGame.start();
       
@@ -899,6 +938,17 @@ document.addEventListener("DOMContentLoaded", () => {
       void elements.pongCanvas.offsetWidth; // Force reflow
       elements.pongCanvas.classList.add("crt-zoom");
     }, 100);
+  }
+
+function startCustomGameWithSettings(customSettings) {
+    appState.isMultiplayer = false; // Custom games are single player for now
+    
+    // Navigate to pong page
+    UIManager.navigateTo("pong-page");
+    elements.pongStatus.innerText = "Custom Game Mode";
+    
+    // Start game with custom settings
+    startPongGame(customSettings);
   }
   
   /**
