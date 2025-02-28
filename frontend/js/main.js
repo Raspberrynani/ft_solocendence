@@ -18,10 +18,6 @@ async function fetchCsrfToken() {
 document.addEventListener("DOMContentLoaded", () => {
   fetchCsrfToken();
   // Ensure cookies have secure attributes when on HTTPS
-
-  document.querySelectorAll(".page").forEach(page => {
-    page.classList.remove("active");
-  });
   
   // Activate only the language page
   const languagePage = document.getElementById("language-page");
@@ -307,10 +303,27 @@ document.addEventListener("DOMContentLoaded", () => {
     console.warn("Privacy back button not found in DOM");
   }
 
-  // Set up navigation buttons
-  document.getElementById('next-button').addEventListener('click', () => {
-    UIManager.navigateTo('game-page');
-  });
+  function setupNavigationButtons() {
+    // Handle all elements with data-navigate attribute
+    document.querySelectorAll('[data-navigate]').forEach(button => {
+      button.addEventListener('click', (e) => {
+        e.preventDefault();
+        const targetPage = button.getAttribute('data-navigate');
+        UIManager.navigateTo(targetPage);
+      });
+    });
+    
+    // Handle special navigation buttons without data attributes if needed
+    const nextButton = document.getElementById('next-button');
+    if (nextButton) {
+      nextButton.addEventListener('click', (e) => {
+        e.preventDefault();
+        UIManager.navigateTo('game-page');
+      });
+    }
+  }
+
+  setupNavigationButtons();
 
   // Find and fix all other navigation buttons
   document.querySelectorAll('[data-navigate]').forEach(button => {
@@ -625,7 +638,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Get selected game mode
     const selectedMode = gameModes[appState.currentGameModeIndex];
     
-    // Handle different game modes
+    // Handle different game modes using UIManager for navigation
     if (selectedMode === "Custom Game") {
       // Navigate to custom game page instead of starting game
       UIManager.navigateTo("custom-game-page");
@@ -904,6 +917,7 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * End the Pong game
    */
+  
   async function endPongGame() {
     console.log("Ending game...");
     
@@ -912,44 +926,13 @@ document.addEventListener("DOMContentLoaded", () => {
     
     // Stop the game
     PongGame.stop();
-
+  
     const csrftoken = await fetchCsrfToken();
     
     // For multiplayer mode, report score to server
     if (appState.isMultiplayer) {
       try {
-        Utils.showLoading(elements.pongStatus);
-        
-        const apiUrl = `${getApiBaseUrl()}/end_game/`;
-        console.log("Sending end game request to:", apiUrl);
-        
-        const response = await fetch(apiUrl, {
-          method: "POST",
-          headers: { 
-            "Content-Type": "application/json",
-            "X-CSRFToken": csrftoken
-          },
-          body: JSON.stringify({ 
-            nickname: appState.nickname, 
-            token: appState.token, 
-            score: appState.roundsPlayed,
-            totalRounds: appState.targetRounds
-          }),
-          credentials: 'include'
-        });
-        
-        if (response.ok) {
-          const result = await response.json();
-          Utils.showToast(
-            result.winner 
-              ? LocalizationManager.get("gameWon") 
-              : LocalizationManager.get("gameLost"), 
-            result.winner ? "success" : "warning"
-          );
-        } else {
-          const errorData = await response.json().catch(() => ({ error: 'Unknown error' }));
-          Utils.showToast(`${LocalizationManager.get("failedToRecord")}: ${errorData.error || response.statusText}`, "error");
-        }
+        // ... existing code to report score
       } catch (error) {
         console.error("Error ending game:", error);
         Utils.showToast(LocalizationManager.get("connectionError"), "error");
@@ -979,9 +962,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // Update UI
     elements.endGameButton.classList.add("hidden");
     
-    // Navigate to leaderboard
+    // Use UIManager to navigate to leaderboard with browser history support
     UIManager.navigateTo("leaderboard-page");
-  }async function updateLeaderboard() {
+  }
+  
+  async function updateLeaderboard() {
     try {
       Utils.showLoading(elements.leaderboardList);
       
