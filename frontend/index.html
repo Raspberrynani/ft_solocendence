@@ -24,7 +24,7 @@
   <!-- Main application container -->
   <div id="app" class="container-fluid p-0">
     <!-- Language Selection Page -->
-    <section id="language-page" class="page active">
+    <div id="language-page" class="page active">
       <h2 class="text-center" data-i18n="selectLanguage">Select Language</h2>
       <select id="language-selector" class="button form-select mb-3">
         <option value="en">English</option>
@@ -32,66 +32,44 @@
         <option value="fr">Français</option>
       </select>
       <button id="next-button" class="button btn btn-primary w-100" data-i18n="next">Next</button>
-    </section>
+    </div>
 
     <!-- Game Start Page (Nickname & Round Selection) -->
-    <section id="game-page" class="page">
+    <div id="game-page" class="page">
       <h2 id="enter-name" class="text-center" data-i18n="enterName">Enter Your Nickname</h2>
+      <div class="mb-3">
+        <input type="text" id="nickname" class="nickname-input form-control" placeholder="Enter a cool name">
+      </div>
       
-      <!-- Player setup form -->
-      <form id="game-setup-form" class="mb-3">
-        <div class="mb-3">
-          <input type="text" id="nickname" class="nickname-input form-control" 
-                 placeholder="Enter a cool name" aria-label="Nickname">
-        </div>
-        <div class="mb-3">
-          <input type="number" id="rounds-input" class="rounds-input form-control" 
-                 placeholder="Enter rounds" value="3" min="1" max="20" aria-label="Number of rounds">
-        </div>
-      </form>
+      <!-- Input for round amount -->
+      <div class="mb-3">
+        <input type="number" id="rounds-input" class="rounds-input form-control" placeholder="Enter rounds" value="3" min="1">
+      </div>
 
       <!-- Join Game Button with mode selection -->
       <div class="queue-wrapper d-flex align-items-center justify-content-center">
-        <button type="button" id="prevMode" class="btn btn-link" aria-label="Previous game mode">
-          <i class="fa fa-caret-left"></i>
-        </button>
-        <button id="start-game" class="button join-game-button hidden" aria-label="Start game">
+        <i id="prevMode" class="fa fa-caret-left"></i>
+        <button id="start-game" class="button join-game-button hidden">
           <div class="button-text" data-i18n="joinGame">JOIN GAME</div>
           <div class="game-mode-indicator">Classic with queue</div>
         </button>
-        <button type="button" id="nextMode" class="btn btn-link" aria-label="Next game mode">
-          <i class="fa fa-caret-right"></i>
-        </button>
+        <i id="nextMode" class="fa fa-caret-right"></i>
       </div>
 
       <!-- Waiting Players Section -->
       <div id="waiting-players-container" class="card bg-transparent mt-3">
         <div class="card-body">
-          <h3 class="card-title h5 mb-2">
-            Currently Waiting Players 
-            <small class="text-muted">(click to join)</small>
-          </h3>
-          <ul id="waiting-players-list" class="list-group list-group-flush bg-transparent" 
-              aria-label="Waiting players list"></ul>
+          <h3 class="card-title h5 mb-2">Currently Waiting Players <small class="text-muted">(click to join)</small></h3>
+          <ul id="waiting-players-list" class="list-group list-group-flush bg-transparent"></ul>
         </div>
       </div>
       
-      <!-- Navigation buttons -->
-      <div class="mt-3">
-        <button id="leaderboard-button" data-navigate="leaderboard-page" 
-                class="button btn btn-secondary w-100" data-i18n="leaderboard">
-          Leaderboard
-        </button>
-        
-        <button id="privacy-policy-button" data-navigate="privacy-policy-page" 
-                class="button btn btn-secondary mt-2 w-100" data-i18n="privacyPolicy">
-          Privacy Policy / GDPR
-        </button>
-      </div>
-    </section>
+      <button id="leaderboard-button" data-navigate="leaderboard-page" class="button btn btn-secondary secondary mt-3 w-100" data-i18n="leaderboard">Leaderboard</button>
+      <button id="privacy-policy-button" data-navigate="privacy-policy-page" class="button btn btn-secondary mt-2 w-100" data-i18n="privacyPolicy">Privacy Policy / GDPR</button>
+    </div>
 
     <!-- Custom Game Page -->
-    <section id="custom-game-page" class="page">
+    <div id="custom-game-page" class="page">
       <h2 class="text-center">Custom Game</h2>
       
       <!-- Code input section -->
@@ -176,10 +154,10 @@
       
       <!-- Back Button -->
       <button id="back-to-menu" data-navigate="game-page" class="button btn btn-secondary mt-2 w-100">Back to Menu</button>
-    </section>
+    </div>
 
     <!-- Pong Game Page -->
-    <section id="pong-page" class="page">
+    <div id="pong-page" class="page">
       <!-- Game Overlay for Fullscreen Info -->
       <div id="game-overlay" class="position-absolute">
         <div id="overlay-player-name" class="text-center"></div>
@@ -191,31 +169,29 @@
         <span id="player-name"></span> | Rounds: <span id="player-rounds">0</span> / <span id="target-rounds">0</span>
       </div>
       
-      <!-- Game canvas -->
-      <canvas id="pong-canvas" class="w-100" aria-label="Pong game canvas"></canvas>
+      <canvas id="pong-canvas" class="w-100"></canvas>
 
       <div class="d-flex justify-content-between mt-3">
-        <button id="end-game" class="button btn btn-secondary hidden">Leave Game</button>
+        <button id="end-game" class="button btn btn-secondary secondary hidden">Leave Game</button>
+        <!-- Hidden debug button for testing -->
+        <button id="debug-join" class="button btn btn-dark debug hidden">DEBUG JOIN</button>
       </div>
-      
       <h3 id="pong-status" class="message text-center mt-3" data-i18n="waitingOpponent">Waiting for an opponent...</h3>
-    </section>
+    </div>
 
     <!-- Leaderboard Page -->
-    <section id="leaderboard-page" class="page">
+    <div id="leaderboard-page" class="page">
       <h2 class="text-center" data-i18n="leaderboard">Leaderboard</h2>
       <div class="card bg-transparent mb-3">
         <div class="card-body p-0">
-          <ul id="leaderboard" class="leaderboard-list list-group list-group-flush" 
-              aria-label="Player leaderboard"></ul>
+          <ul id="leaderboard" class="leaderboard-list list-group list-group-flush"></ul>
         </div>
       </div>
-      <button id="back-button" data-navigate="game-page" class="button btn btn-secondary w-100" 
-              data-i18n="back">Back</button>
-    </section>
+      <button id="back-button" data-navigate="game-page" class="button btn btn-secondary secondary w-100" data-i18n="back">Back</button>
+    </div>
 
     <!-- Privacy Policy Page -->
-    <section id="privacy-policy-page" class="page">
+    <div id="privacy-policy-page" class="page">
       <h2 class="text-center" data-i18n="privacyPolicy">Privacy Policy</h2>
       
       <div class="privacy-content">
@@ -297,33 +273,43 @@
       
       <button id="privacy-back-button" data-navigate="game-page" class="button btn btn-secondary w-100" 
               data-i18n="back">Back</button>
-    </section>
+    </div>
   </div>
 
   <!-- Bootstrap JS Bundle -->
   <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-  
-  <!-- Application JS Files -->
+    
+  <!-- Utilities -->
   <script src="js/utils/utils.js"></script>
-  
-  <!-- Core modules -->
-  <script src="js/core/i18n-manager.js"></script>
-  <script src="js/core/page-manager.js"></script>
-  <script src="js/core/api-service.js"></script>
-  <script src="js/core/websocket-service.js"></script>
-  
-  <!-- Game modules -->
-  <script src="js/game/pong-engine.js"></script>
-  <script src="js/game/pong-renderer.js"></script>
-  <script src="js/game/background-animation.js"></script>
-  
+  <script src="js/utils/storage.js"></script>
+  <script src="js/utils/validation.js"></script>
+    
+  <!-- UI Management -->
+  <script src="js/ui/i18n-manager.js"></script>
+  <script src="js/ui/page-manager.js"></script>
+  <script src="js/ui/components/leaderboard.js"></script>
+  <script src="js/ui/components/player-stats.js"></script>
+    
+  <!-- Services -->
+  <script src="js/services/api-service.js"></script>
+  <script src="js/services/websocket-service.js"></script>
+    
+  <!-- Core Game Components -->
+  <script src="js/core/pong-engine.js"></script>
+  <script src="js/core/pong-renderer.js"></script>
+  <script src="js/core/ai-player.js"></script>
+  <script src="js/core/background-animation.js"></script>
+    
   <!-- Controllers -->
   <script src="js/controllers/game-controller.js"></script>
-  <script src="js/controllers/custom-game-controller.js"></script>
   <script src="js/controllers/leaderboard-controller.js"></script>
+  <script src="js/controllers/custom-game-controller.js"></script>
   <script src="js/controllers/privacy-controller.js"></script>
-  
-  <!-- Main app initialization -->
+
+  <!-- Integration Fixes - ADD THIS LINE -->
+  <script src="js/utils/integration-fixes.js"></script>
+    
+  <!-- Main Application - MUST BE LAST -->
   <script src="js/app.js"></script>
 </body>
 </html>
