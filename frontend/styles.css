@@ -11,7 +11,34 @@ body {
     justify-content: center;
     align-items: center;
     overflow: hidden; /* Prevent scrollbars */
+    touch-action: none; /* Prevent default touch behaviors */
 }
+
+  /* Mobile Joystick Specific Styles */
+  #mobile-joystick {
+    display: none; /* Hidden by default */
+  }
+
+  @media (max-width: 768px) {
+    #mobile-joystick {
+      display: block; /* Show on mobile devices */
+    }
+  }
+
+  /* Prevent text selection and overscroll on mobile */
+  html, body {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    user-select: none;
+    overscroll-behavior: none;
+  }
+
+  /* Disable double-tap zoom */
+  html {
+    touch-action: manipulation;
+  }
+
 
 /* Canvas background */
 #background-pong {
