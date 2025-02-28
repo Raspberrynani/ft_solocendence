@@ -103,11 +103,11 @@ def end_game(request):
     except Exception as e:
         return JsonResponse({"error": str(e)}, status=400)
     
-# Add these imports to api/views.py
+# Add these functions to your existing views.py
 
 def generate_verification_hash(nickname):
     """
-    Generate a verification hash based on nickname and current hour
+    Generate a secure verification hash based on nickname and current hour
     This ensures the hash changes every hour for security
     """
     # Get current hour as timestamp (changes every hour)
@@ -118,41 +118,80 @@ def generate_verification_hash(nickname):
     
     # Generate hash
     hash_object = hashlib.sha256(verification_string.encode())
-    return hash_object.hexdigest()[:12]  # First 12 chars for simplicity
+    return hash_object.hexdigest()
+
+@require_http_methods(["POST"])
+def check_player_exists(request):
+    """
+    Check if a player exists without revealing too much information
+    """
+    try:
+        data = json.loads(request.body)
+        nickname = data.get("nickname")
+        
+        # Verify nickname format
+        if not re.match(r'^[A-Za-z0-9_-]{1,16}$', nickname):
+            return JsonResponse({"exists": False, "message": "Invalid nickname format"})
+        
+        # Check if player exists
+        player_exists = Player.objects.filter(name=nickname).exists()
+        
+        if player_exists:
+            # Generate verification hash
+            verification_hash = generate_verification_hash(nickname)
+            
+            return JsonResponse({
+                "exists": True, 
+                "message": "Player found",
+                # Only send first 6 characters of hash to verify later
+                "verification_prefix": verification_hash[:6]
+            })
+        else:
+            return JsonResponse({"exists": False, "message": "Player not found"})
+    
+    except json.JSONDecodeError:
+        return JsonResponse({"exists": False, "message": "Invalid request"}, status=400)
 
 @csrf_protect
 @require_http_methods(["POST"])
 def delete_player_data(request):
     """
-    Delete a player's data after verification
+    Delete a player's data after secure verification
     """
     try:
         data = json.loads(request.body)
         nickname = data.get("nickname")
         verification_code = data.get("verification_code")
         
+        # Verify nickname format
+        if not re.match(r'^[A-Za-z0-9_-]{1,16}$', nickname):
+            return JsonResponse({"success": False, "message": "Invalid nickname"}, status=400)
+        
         # Verify the nickname exists
         try:
             player = Player.objects.get(name=nickname)
         except Player.DoesNotExist:
-            # We return success even if player doesn't exist for security
-            return JsonResponse({"success": True, "message": "If this player exists, their data has been deleted."})
+            return JsonResponse({"success": False, "message": "Player not found"}, status=404)
         
         # Generate the expected verification hash
         expected_hash = generate_verification_hash(nickname)
         
         # Check if verification matches
-        if verification_code != expected_hash:
-            return JsonResponse({"success": False, "message": "Verification failed."}, status=400)
-        
-        # Delete player data
-        player.delete()
-        
-        return JsonResponse({
-            "success": True,
-            "message": "Player data has been permanently deleted."
-        })
+        if verification_code == expected_hash:
+            # Delete player data
+            player.delete()
+            
+            return JsonResponse({
+                "success": True,
+                "message": "Player data has been permanently deleted."
+            })
+        else:
+            return JsonResponse({
+                "success": False, 
+                "message": "Verification failed. Please try again."
+            }, status=400)
+    
     except json.JSONDecodeError:
-        return JsonResponse({"success": False, "message": "Invalid JSON."}, status=400)
+        return JsonResponse({"success": False, "message": "Invalid request"}, status=400)
     except Exception as e:
         return JsonResponse({"success": False, "message": str(e)}, status=500)

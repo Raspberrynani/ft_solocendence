@@ -932,11 +932,40 @@ document.addEventListener("DOMContentLoaded", () => {
     // For multiplayer mode, report score to server
     if (appState.isMultiplayer) {
       try {
-        // ... existing code to report score
+        const response = await fetch(`${getApiBaseUrl()}/end_game/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': csrftoken
+          },
+          body: JSON.stringify({
+            nickname: appState.nickname,
+            token: appState.token,
+            score: appState.roundsPlayed,
+            totalRounds: appState.targetRounds
+          })
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to record game');
+        }
+
+        const result = await response.json();
+        
+        // Show game result toast
+        if (result.winner) {
+          Utils.showToast(LocalizationManager.get("gameWon"), "success");
+        } else {
+          Utils.showToast(LocalizationManager.get("gameLost"), "warning");
+        }
       } catch (error) {
         console.error("Error ending game:", error);
-        Utils.showToast(LocalizationManager.get("connectionError"), "error");
+        Utils.showToast(LocalizationManager.get("failedToRecord"), "error");
       }
+    } else {
+      // For non-multiplayer games (AI or custom), do not record
+      console.log("Not recording game result for non-multiplayer mode");
+      Utils.showToast("Custom/AI game completed", "info");
     }
     
     // Exit fullscreen if active
@@ -965,7 +994,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // Use UIManager to navigate to leaderboard with browser history support
     UIManager.navigateTo("leaderboard-page");
   }
-  
+
   async function updateLeaderboard() {
     try {
       Utils.showLoading(elements.leaderboardList);
