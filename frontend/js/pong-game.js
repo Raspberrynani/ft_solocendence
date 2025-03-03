@@ -47,15 +47,19 @@ const PongGame = (function() {
    * @param {Object} config - Game configuration object
   */
   function init(config = {}) {
-    // Merge provided config with defaults
-    gameConfig = { ...gameConfig, ...config };
+    console.log("PongGame initializing with config:", config);
     
     // Get canvas and setup context
     canvas = document.getElementById(config.canvasId || 'pong-canvas');
+    if (!canvas) {
+      console.error("Canvas element not found!");
+      return false;
+    }
+    
     ctx = canvas.getContext('2d');
     
-    // Reset game state
-    resetGameState();
+    // Perform a comprehensive reset with new config
+    resetGame(config);
     
     // Set mode
     isMultiplayer = config.isMultiplayer || false;
@@ -78,7 +82,7 @@ const PongGame = (function() {
     // Check initial fullscreen state
     checkFullscreenState();
     
-    console.log("Pong game initialized with config:", gameConfig);
+    console.log("PongGame initialized successfully");
     return true;
   }
   
@@ -143,26 +147,116 @@ const PongGame = (function() {
   /**
    * Reset the game state (paddles and ball)
    */
+  /**
+ * Reset the game state (paddles and ball)
+  */
+  function resetGame(config = {}) {
+    console.log("Performing comprehensive game reset");
+    
+    // Store reference to essential data that should persist
+    const preservedNickname = playerInfo.nickname;
+    const preservedToken = playerInfo.token;
+    
+    // Default game configuration (vanilla settings)
+    const defaultConfig = {
+      rounds: 3,
+      currentRounds: 0,
+      speedIncrement: 0.5,
+      paddleSpeed: 4.5,
+      initialBallSpeed: 4,
+      paddleSizeMultiplier: 1.0,
+      ballColor: '#00d4ff',
+      leftPaddleColor: '#007bff',
+      rightPaddleColor: '#ff758c',
+      gravityEnabled: false,
+      gravityStrength: 0.1,
+      bounceRandom: false
+    };
+    
+    // Reset gameConfig to defaults first
+    gameConfig = { ...defaultConfig };
+    
+    // Now apply any new config settings
+    if (config) {
+      gameConfig = { ...gameConfig, ...config };
+    }
+    
+    // Reset player info (but preserve nickname and token)
+    playerInfo = {
+      nickname: preservedNickname,
+      token: preservedToken
+    };
+    
+    // Reset game objects
+    resetGameState();
+    
+    // Reset AI state if it exists
+    if (aiState) {
+      aiState = {
+        lastUpdateTime: 0,
+        action: null,
+        lastBallPosition: { x: 0, y: 0 },
+        calculatedVelocity: { x: 0, y: 0 },
+        decisionInterval: 1000,
+        difficulty: 0.7
+      };
+    }
+    
+    // Reset control state
+    isControlEnabled = true;
+    
+    // Reset fullscreen state
+    isFullscreen = !!document.fullscreenElement || 
+                   !!document.webkitFullscreenElement ||
+                   !!document.mozFullScreenElement ||
+                   !!document.msFullscreenElement;
+    
+    // Log reset completion
+    console.log("Game reset complete with config:", gameConfig);
+  }
+  
+  /**
+   * Reset the game state (paddles and ball)
+   */
   function resetGameState() {
+    // Reset current rounds counter
+    gameConfig.currentRounds = 0;
+    
     // Calculate dimensions based on canvas size
     updateGameDimensions(true); // Force update with reset
     
-    // Apply paddle size multiplier
-    paddleHeight = paddleHeight * (gameConfig.paddleSizeMultiplier / 100);
+    // Apply paddle size multiplier but maintain minimum size
+    paddleHeight = Math.max(60, Math.floor(canvas.height * 0.2) * (gameConfig.paddleSizeMultiplier / 100));
+    paddleWidth = Math.max(10, Math.floor(canvas.width * 0.02));
     
-    // Reset paddles
+    // Ensure ball radius is set properly
+    ballRadius = Math.max(5, Math.floor(Math.min(canvas.width, canvas.height) * 0.01));
+    
+    // Log dimensions for debugging
+    console.log(`Game dimensions: canvas=${canvas.width}x${canvas.height}, paddle=${paddleWidth}x${paddleHeight}, ball=${ballRadius}`);
+    
+    // Reset paddles with explicit dimensions
     leftPaddle = { 
       x: paddleWidth * 2, 
-      y: canvas.height / 2 - paddleHeight / 2 
+      y: canvas.height / 2 - paddleHeight / 2,
+      width: paddleWidth,
+      height: paddleHeight
     };
     
     rightPaddle = { 
       x: canvas.width - (paddleWidth * 3), 
-      y: canvas.height / 2 - paddleHeight / 2 
+      y: canvas.height / 2 - paddleHeight / 2,
+      width: paddleWidth,
+      height: paddleHeight
     };
   
-    // Reset ball with random angle
+    // Reset ball
     resetBall();
+    
+    // Reset any other game-specific state here
+    lastFrameTime = 0;
+    speedScaleFactor = canvas.width / 800;
+    speedScaleFactor = Math.max(0.3, Math.min(0.8, speedScaleFactor));
   }
   
   /**
@@ -297,9 +391,16 @@ const PongGame = (function() {
    * Start the game
    */
   function start() {
-    if (isRunning) return;
+    if (isRunning) {
+      console.log("Game already running, ignoring start request");
+      return;
+    }
+    
+    console.log("Starting game");
     
     isRunning = true;
+    
+    // Ensure game state is fresh
     resetGameState();
     
     // Setup input handlers
@@ -308,8 +409,6 @@ const PongGame = (function() {
     // Start game loop
     lastFrameTime = performance.now();
     gameLoopId = requestAnimationFrame(gameLoop);
-    
-    console.log("Game started");
     
     // Trigger callback if provided
     if (eventCallbacks.onGameStart) {
@@ -620,6 +719,9 @@ const PongGame = (function() {
   /**
    * Draw the game state
    */
+  /**
+ * Draw the game state
+ */
   function draw() {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -665,16 +767,20 @@ const PongGame = (function() {
     ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
     ctx.fill();
     
+    // Get paddle dimensions - ensure they exist
+    const pWidth = leftPaddle.width || paddleWidth;
+    const pHeight = leftPaddle.height || paddleHeight;
+    
     // Draw paddles with rounded corners
-    const cornerRadius = Math.min(8, paddleWidth / 2);
+    const cornerRadius = Math.min(5, pWidth / 2);
     
     // Draw left paddle
     ctx.fillStyle = gameConfig.leftPaddleColor;
-    drawRoundedRect(leftPaddle.x, leftPaddle.y, paddleWidth, paddleHeight, cornerRadius);
+    drawRoundedRect(leftPaddle.x, leftPaddle.y, pWidth, pHeight, cornerRadius);
     
     // Draw right paddle
     ctx.fillStyle = gameConfig.rightPaddleColor;
-    drawRoundedRect(rightPaddle.x, rightPaddle.y, paddleWidth, paddleHeight, cornerRadius);
+    drawRoundedRect(rightPaddle.x, rightPaddle.y, pWidth, pHeight, cornerRadius);
     
     // If control is disabled (minimized mode), show a notification
     if (!isControlEnabled) {
@@ -730,16 +836,37 @@ const PongGame = (function() {
    * Update remote paddle position (for multiplayer)
    * @param {number} y - Y position of remote paddle
    */
+  /**
+ * Update remote paddle position (for multiplayer)
+ * @param {number} y - Y position of remote paddle
+ */
   function updateRemotePaddle(y) {
-    if (isMultiplayer) {
-      rightPaddle.y = y;
+    if (!isMultiplayer || !rightPaddle) return;
+    
+    // Ensure paddle height is properly initialized
+    if (!paddleHeight || paddleHeight < 10) {
+      console.log("Paddle height not properly initialized, recalculating");
+      paddleHeight = Math.max(60, Math.floor(canvas.height * 0.2));
     }
+    
+    // Ensure rightPaddle has proper dimensions
+    if (!rightPaddle.height) {
+      rightPaddle.height = paddleHeight;
+    }
+    
+    // Clamp the position to be within the canvas bounds
+    rightPaddle.y = Math.max(0, Math.min(canvas.height - paddleHeight, y));
+    
+    // For debugging - remove in production
+    console.log(`Updated remote paddle to Y=${rightPaddle.y}, canvas height=${canvas.height}, paddle height=${paddleHeight}`);
   }
   
-  /**
+    /**
    * Stop the game
    */
   function stop() {
+    console.log("Stopping game");
+    
     isRunning = false;
     
     if (gameLoopId) {
@@ -750,16 +877,9 @@ const PongGame = (function() {
     // Remove input handlers
     removeInputHandlers();
     
-    console.log("Game stopped");
-  }
-  
-  /**
-   * Set game difficulty (0-1, higher is harder)
-   * @param {number} difficulty - Difficulty level
-   */
-  function setDifficulty(difficulty) {
-    if (aiState) {
-      aiState.difficulty = Math.max(0, Math.min(1, difficulty));
+    // Call onGameEnd callback if provided
+    if (eventCallbacks.onGameEnd) {
+      eventCallbacks.onGameEnd();
     }
   }
   

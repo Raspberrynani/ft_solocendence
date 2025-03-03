@@ -573,9 +573,15 @@ document.addEventListener("DOMContentLoaded", () => {
    * Handle game start event
    * @param {number} rounds - Number of rounds for the game
    * @param {boolean} isTournament - Whether this is a tournament game
+   * @param {string} gameRoom - Game room identifier from server
    */
-  function handleGameStart(rounds, isTournament = false) {
+  function handleGameStart(rounds, isTournament = false, gameRoom = null) {
+    console.log(`Game start handler: rounds=${rounds}, isTournament=${isTournament}, room=${gameRoom}`);
+    
+    // Clear status
     elements.pongStatus.innerText = "";
+    
+    // Set rounds
     if (rounds) {
       appState.targetRounds = rounds;
       elements.targetRounds.innerText = rounds;
@@ -584,47 +590,110 @@ document.addEventListener("DOMContentLoaded", () => {
     // Set tournament game flag
     appState.isTournamentGame = isTournament;
     
-    // Start the game
-    startPongGame();
+    // IMPORTANT: For tournament games, ALWAYS ensure multiplayer is enabled
+    if (isTournament) {
+      console.log("Tournament game starting - enabling multiplayer mode");
+      appState.isMultiplayer = true;
+      
+      // Set a tournament status message
+      elements.pongStatus.innerText = "Tournament Match Starting...";
+    }
+    
+    // Store game room info if provided
+    if (gameRoom) {
+      appState.currentGameRoom = gameRoom;
+    }
+    
+    // Reset game state
+    appState.gameOverHandled = false;
+    appState.roundsPlayed = 0;
+    
+    // Update UI with player info
+    elements.playerNameDisplay.innerText = Utils.sanitizeHTML(appState.nickname);
+    elements.playerName.innerText = Utils.sanitizeHTML(appState.nickname);
+    elements.overlayScoreDisplay.innerText = appState.roundsPlayed;
+    elements.playerRounds.innerText = appState.roundsPlayed;
+    
+    // Navigate to game page if not already there
+    if (!document.getElementById('pong-page').classList.contains('active')) {
+      UIManager.navigateTo("pong-page");
+    }
+    
+    // Start the game with a slight delay to allow UI to update
+    setTimeout(() => {
+      console.log("Starting pong game...");
+      startPongGame();
+    }, 100);
   }
-  
   /**
    * Handle game updates from opponent
    * @param {Object} data - Game update data
    */
   function handleGameUpdate(data) {
-    if (data && data.paddleY !== undefined) {
-      PongGame.updateRemotePaddle(data.paddleY);
+    if (!data) return;
+    
+    // Handle paddle position updates
+    if (data.paddleY !== undefined) {
+      console.log(`Received remote paddle update: Y=${data.paddleY}`);
+      
+      // Ensure PongGame is initialized
+      if (PongGame && typeof PongGame.updateRemotePaddle === 'function') {
+        PongGame.updateRemotePaddle(data.paddleY);
+      } else {
+        console.warn("PongGame not initialized, can't update paddle");
+      }
     }
+    
+    // Handle any other game state updates
+    // (future expansion point)
   }
   
-  /**
+    /**
    * Handle game over event
    * @param {number} score - Final score
    */
   function handleGameOver(score) {
-    if (!appState.gameOverHandled && (appState.roundsPlayed >= appState.targetRounds || score >= appState.targetRounds)) {
+    console.log(`handleGameOver called: score=${score}, rounds=${appState.roundsPlayed}, target=${appState.targetRounds}, already handled=${appState.gameOverHandled}`);
+    
+    // Check if this is a valid game over condition
+    const isGameOver = appState.roundsPlayed >= appState.targetRounds || score >= appState.targetRounds / 2;
+    
+    if (!appState.gameOverHandled && isGameOver) {
+      console.log("Game is over - processing end game logic");
       appState.gameOverHandled = true;
       appState.gameActive = false; // Game is no longer active
       
-      // If this is a tournament game, return to the tournament page after ending
-      if (appState.isTournamentGame && window.TournamentManager && window.TournamentManager.isInTournament()) {
-        PongGame.stop();
+      // If this is a tournament game, handle it differently
+      if (appState.isTournamentGame) {
+        console.log("Tournament game over - notifying server and returning to tournament view");
         
         // Send game over to WebSocket to notify tournament system
         WebSocketManager.sendGameOver(appState.roundsPlayed);
+        
+        // Stop the game 
+        PongGame.stop();
         
         // Exit fullscreen if active
         exitFullscreen();
         
         // Navigate back to game page where tournament UI is
-        UIManager.navigateTo("game-page");
+        setTimeout(() => {
+          // Show an informative toast
+          Utils.showToast("Tournament match completed! Waiting for next match...", "info");
+          
+          UIManager.navigateTo("game-page");
+        }, 500);
       } else {
+        console.log("Regular game over - ending game");
         endPongGame();
       }
+    } else if (appState.gameOverHandled) {
+      console.log("Game over already handled - ignoring");
+    } else {
+      console.log("Not enough rounds for game over - continuing");
     }
   }
-  
+    
   /**
    * Handle fullscreen changes
    */
@@ -1198,8 +1267,13 @@ if (selectedMode === "Tournament") {
   
   /**
    * Start the Pong game
+   * @param {Object} customSettings - Optional custom game settings
    */
   function startPongGame(customSettings = null) {
+    console.log("startPongGame called with mode:", 
+      appState.isMultiplayer ? "Multiplayer" : 
+      customSettings ? "Custom" : "AI");
+    
     // Set game as active
     appState.gameActive = true;
     
@@ -1221,65 +1295,18 @@ if (selectedMode === "Tournament") {
     
     // Allow a short delay for fullscreen to complete
     setTimeout(() => {
-      // Prepare game initialization options
+      // Prepare game initialization options - start with basic settings
       const gameInitOptions = {
         canvasId: 'pong-canvas',
         isMultiplayer: appState.isMultiplayer,
         nickname: appState.nickname,
         token: appState.token,
-        rounds: appState.targetRounds,
-        callbacks: {
-          onRoundComplete: (roundsPlayed) => {
-            appState.roundsPlayed = roundsPlayed;
-            elements.overlayScoreDisplay.innerText = roundsPlayed;
-            elements.playerRounds.innerText = roundsPlayed;
-          },
-          onGameOver: (score) => {
-            handleGameOver(score);
-          },
-          onPaddleMove: (paddleY) => {
-            // Send paddle position to server in multiplayer mode
-            if (appState.isMultiplayer) {
-              WebSocketManager.sendPaddleUpdate(paddleY);
-            }
-          },
-          onGameStart: () => {
-            // Initialize mobile joystick if on mobile device
-            if (Utils.isMobileDevice()) {
-              const canvas = document.getElementById('pong-canvas');
-              if (window.MobileJoystick) {
-                window.MobileJoystick.init(canvas, (paddleY) => {
-                  // Update local paddle and send to server if multiplayer
-                  if (PongGame.updateLocalPaddle) {
-                    PongGame.updateLocalPaddle(paddleY);
-                  }
-                  
-                  if (appState.isMultiplayer) {
-                    WebSocketManager.sendPaddleUpdate(paddleY);
-                  }
-                });
-              }
-            }
-          },
-          onGameEnd: () => {
-            // Destroy mobile joystick when game ends
-            if (Utils.isMobileDevice() && window.MobileJoystick) {
-              window.MobileJoystick.destroy();
-            }
-          },
-          onFullscreenChange: (isFullscreen) => {
-            // Update control enabled state based on fullscreen
-            if (Utils.isMobileDevice() && window.MobileJoystick && !isFullscreen) {
-              // Recreate joystick if needed
-              const canvas = document.getElementById('pong-canvas');
-              window.MobileJoystick.init(canvas);
-            }
-          }
-        }
+        rounds: appState.targetRounds
       };
-
-      // If custom settings are provided, add them to the initialization options
+      
+      // If this is a custom game, add custom settings
       if (customSettings) {
+        console.log("Adding custom game settings:", customSettings);
         Object.assign(gameInitOptions, {
           initialBallSpeed: customSettings.ballSpeed,
           speedIncrement: customSettings.speedIncrement,
@@ -1290,17 +1317,64 @@ if (selectedMode === "Tournament") {
           gravityEnabled: customSettings.gravityEnabled,
           bounceRandom: customSettings.bounceRandom
         });
+      } else {
+        // For non-custom games, explicitly set to default values
+        // This ensures any previous custom settings are cleared
+        console.log("Using default game settings (non-custom game)");
+        Object.assign(gameInitOptions, {
+          initialBallSpeed: 4,
+          speedIncrement: 0.5,
+          paddleSizeMultiplier: 100,
+          ballColor: '#00d4ff',
+          leftPaddleColor: '#007bff',
+          rightPaddleColor: '#ff758c',
+          gravityEnabled: false,
+          bounceRandom: false
+        });
       }
+      
+      // Add callbacks
+      gameInitOptions.callbacks = {
+        onRoundComplete: (roundsPlayed) => {
+          appState.roundsPlayed = roundsPlayed;
+          elements.overlayScoreDisplay.innerText = roundsPlayed;
+          elements.playerRounds.innerText = roundsPlayed;
+          
+          console.log(`Round completed: ${roundsPlayed}/${appState.targetRounds}`);
+        },
+        onGameOver: (score) => {
+          console.log("Game over callback triggered with score:", score);
+          handleGameOver(score);
+        },
+        onPaddleMove: (paddleY) => {
+          // Send paddle position to server in multiplayer mode
+          if (appState.isMultiplayer) {
+            WebSocketManager.sendPaddleUpdate(paddleY);
+          }
+        },
+        onGameStart: () => {
+          console.log("Game started callback");
+        },
+        onGameEnd: () => {
+          console.log("Game ended callback");
+        },
+        onFullscreenChange: (isFullscreen) => {
+          console.log("Fullscreen changed:", isFullscreen);
+        }
+      };
+      
+      console.log("Initializing PongGame with options:", gameInitOptions);
       
       // Initialize and start game
       PongGame.init(gameInitOptions);
-      
       PongGame.start();
       
       // Apply "CRT zoom" effect for visual flair
       void elements.pongCanvas.offsetWidth; // Force reflow
       elements.pongCanvas.classList.add("crt-zoom");
-    }, 100);
+      
+      console.log("PongGame started successfully");
+    }, 300); // Increased timeout for more reliable fullscreen transition
   }
 
   function startCustomGameWithSettings(customSettings) {

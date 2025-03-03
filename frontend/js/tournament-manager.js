@@ -293,12 +293,48 @@ const TournamentManager = (function() {
    */
   function handleTournamentUpdate(tournament) {
     console.log("Tournament updated:", tournament);
+    
     if (currentTournament && tournament.id === currentTournament.id) {
+      // Store previous state to detect changes
+      const hadCurrentMatch = currentTournament.current_match !== null;
+      const previousMatchPlayers = hadCurrentMatch ? 
+        `${currentTournament.current_match.player1} vs ${currentTournament.current_match.player2}` : 
+        null;
+      
+      // Update tournament data
       currentTournament = tournament;
+      
+      // Check if there's a new match
+      const hasNewMatch = tournament.current_match !== null;
+      
+      // If there's a new current match and the player is in it, highlight it
+      if (hasNewMatch) {
+        const isPlayerInMatch = 
+          tournament.current_match.player1 === currentNickname || 
+          tournament.current_match.player2 === currentNickname;
+        
+        const currentMatchPlayers = 
+          `${tournament.current_match.player1} vs ${tournament.current_match.player2}`;
+        
+        // Notify if this is a new match involving the current player
+        if (isPlayerInMatch && (!hadCurrentMatch || previousMatchPlayers !== currentMatchPlayers)) {
+          console.log("Player is in the current match!");
+          Utils.showToast("It's your turn to play! Get ready for your match.", "info");
+          
+          // Add visual highlighting to the current match
+          if (elements.currentMatch) {
+            elements.currentMatch.classList.add("highlight-match");
+            setTimeout(() => {
+              elements.currentMatch.classList.remove("highlight-match");
+            }, 5000);
+          }
+        }
+      }
+      
+      // Update UI
       updateTournamentUI(tournament);
     }
   }
-  
   /**
    * Handle tournament left event
    */

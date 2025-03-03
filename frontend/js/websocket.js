@@ -126,6 +126,8 @@ const WebSocketManager = (function() {
     };
   }
   
+  
+
   /**
    * Handle incoming WebSocket messages
    * @param {MessageEvent} event - The WebSocket message event
@@ -153,6 +155,11 @@ const WebSocketManager = (function() {
    * @param {Object} data - Parsed message data
    */
   function processMessage(data) {
+    // Add enhanced debugging for tournament messages
+    if (data.type.includes('tournament') || data.type === 'start_game') {
+      console.log("WebSocket [TOURNAMENT DEBUG]:", data);
+    }
+    
     switch (data.type) {
       case "queue_update":
         if (gameCallbacks.onQueueUpdate) {
@@ -162,10 +169,23 @@ const WebSocketManager = (function() {
         
       case "start_game":
         console.log("Received start_game event, triggering callback with rounds:", data.rounds);
+        if (data.room) {
+          try {
+            localStorage.setItem('currentGameRoom', data.room);
+          } catch (e) {
+            console.error("Error saving game room:", e);
+          }
+        }
+        
         if (gameCallbacks.onGameStart) {
           // Use timeout to ensure UI is ready
           setTimeout(() => {
-            gameCallbacks.onGameStart(data.rounds, data.is_tournament);
+            // Explicitly pass all relevant data to the callback
+            gameCallbacks.onGameStart(
+              data.rounds || 3, 
+              data.is_tournament || false,
+              data.room || null
+            );
           }, 50);
         }
         break;
@@ -289,7 +309,18 @@ const WebSocketManager = (function() {
   function sendPaddleUpdate(paddleY) {
     if (!isConnected) return false;
     
+    // Add extra validation to ensure we're sending valid data
+    if (typeof paddleY !== 'number' || isNaN(paddleY)) {
+      console.warn("Invalid paddle Y position:", paddleY);
+      return false;
+    }
+    
     try {
+      // Log occasional paddle updates (not every frame to avoid spam)
+      if (Math.random() < 0.05) {
+        console.log(`Sending paddle update: Y=${paddleY.toFixed(1)}`);
+      }
+      
       ws.send(JSON.stringify({
         type: "game_update",
         data: { paddleY }
