@@ -355,29 +355,72 @@ document.addEventListener("DOMContentLoaded", () => {
   elements.endGameButton.addEventListener("click", endPongGame);
   
   // Tournament buttons (if they exist)
+  function initializeTournamentManager(nickname) {
+    console.log("Attempting to initialize TournamentManager...");
+    
+    if (typeof window.TournamentManager === 'undefined') {
+      console.error("TournamentManager is not loaded. Attempting to diagnose issue.");
+      
+      // Additional diagnostic logging
+      const requiredScripts = [
+        'utils.js', 
+        'websocket.js', 
+        'tournament-manager.js'
+      ];
+      
+      requiredScripts.forEach(script => {
+        const scriptElement = document.querySelector(`script[src*="${script}"]`);
+        if (scriptElement) {
+          console.log(`${script} is present in the document`);
+        } else {
+          console.error(`${script} MISSING from document`);
+        }
+      });
+      
+      // Fallback error display
+      Utils.showAlert("Tournament functionality is currently unavailable. Please refresh the page or check your browser's console.", "error");
+      return false;
+    }
+  
+    try {
+      console.log("Initializing TournamentManager with elements:", elements);
+      window.TournamentManager.init(elements, nickname);
+      return true;
+    } catch (error) {
+      console.error("Error initializing TournamentManager:", error);
+      Utils.showAlert("Failed to initialize tournaments. Please try again.", "error");
+      return false;
+    }
+  }
+  
+  // Modify the tournament creation handling in your existing code
   if (elements.createTournament) {
     elements.createTournament.addEventListener('click', () => {
-      if (!WebSocketManager.isConnected()) {
-        Utils.showAlert("Cannot create tournament: Not connected to server");
-        return;
-      }
-      
       const nickname = elements.nicknameInput.value.trim();
+      
       if (!nickname) {
         Utils.showAlert("Please enter your nickname first");
         return;
       }
-      
-      // Get rounds from rounds input
-      const rounds = parseInt(elements.roundsInput.value) || 3;
-      
-      // Send create tournament request
-      WebSocketManager.send({
-        type: "create_tournament",
-        nickname: nickname,
-        name: `${nickname}'s Tournament`,
-        rounds: rounds
-      });
+  
+      // Use the new initialization method
+      if (initializeTournamentManager(nickname)) {
+        // If initialization succeeds, send tournament creation request
+        const rounds = parseInt(elements.roundsInput.value) || 3;
+        
+        console.log("Creating tournament with rounds:", rounds);
+        
+        if (WebSocketManager.isConnected()) {
+          WebSocketManager.send({
+            type: "create_tournament",
+            nickname: nickname,
+            name: `${nickname}'s Tournament`,
+            rounds: rounds
+          });
+        } else {
+          Utils.showAlert("Cannot create tournament: Not connected to server");
+        }
+      }
     });
   }
   
