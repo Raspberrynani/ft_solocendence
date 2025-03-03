@@ -724,3 +724,74 @@ h2, h3, .button, #pong-canvas {
   }
 
 
+/* Tournament styles */
+#tournament-section {
+    margin-top: 20px;
+  }
+  
+  /* Tournament player list */
+  #tournament-players li {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+  }
+  
+  /* Current match display */
+  .current-match-display {
+    background-color: rgba(0, 212, 255, 0.1);
+    border: 1px solid rgba(0, 212, 255, 0.3);
+    border-radius: 5px;
+    padding: 10px;
+    text-align: center;
+    font-weight: bold;
+  }
+  
+  /* Match styling */
+  .match-item {
+    padding: 8px 12px;
+    margin-bottom: 5px;
+    background-color: rgba(0, 0, 0, 0.3);
+    border-radius: 5px;
+    display: flex;
+    justify-content: space-between;
+  }
+  
+  .match-item.completed {
+    border-left: 3px solid #28a745;
+  }
+  
+  .match-winner {
+    font-weight: bold;
+    color: #28a745;
+  }
+  
+  /* Available tournaments */
+  #tournament-list li {
+    cursor: pointer;
+    transition: all 0.2s ease;
+  }
+  
+  #tournament-list li:hover {
+    background-color: rgba(0, 212, 255, 0.2);
+  }
+  
+  .tournament-info {
+    display: flex;
+    justify-content: space-between;
+    width: 100%;
+  }
+  
+  .tournament-status {
+    font-size: 12px;
+    padding: 2px 6px;
+    border-radius: 3px;
+    background-color: rgba(40, 167, 69, 0.2);
+  }
+  
+  .tournament-status.started {
+    background-color: rgba(255, 193, 7, 0.2);
+  }

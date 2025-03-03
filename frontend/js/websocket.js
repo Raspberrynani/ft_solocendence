@@ -165,7 +165,7 @@ const WebSocketManager = (function() {
         if (gameCallbacks.onGameStart) {
           // Use timeout to ensure UI is ready
           setTimeout(() => {
-            gameCallbacks.onGameStart(data.rounds);
+            gameCallbacks.onGameStart(data.rounds, data.is_tournament);
           }, 50);
         }
         break;
@@ -192,8 +192,65 @@ const WebSocketManager = (function() {
         }
         break;
         
+      // Tournament message types
+      case "tournament_list":
+        if (window.TournamentManager) {
+          window.TournamentManager.updateTournamentList(data.tournaments);
+        }
+        break;
+        
+      case "tournament_created":
+        if (window.TournamentManager) {
+          window.TournamentManager.handleTournamentCreated(data.tournament);
+        }
+        break;
+        
+      case "tournament_joined":
+        if (window.TournamentManager) {
+          window.TournamentManager.handleTournamentJoined(data.tournament);
+        }
+        break;
+        
+      case "tournament_update":
+        if (window.TournamentManager) {
+          window.TournamentManager.handleTournamentUpdate(data.tournament);
+        }
+        break;
+        
+      case "tournament_left":
+        if (window.TournamentManager) {
+          window.TournamentManager.handleTournamentLeft();
+        }
+        break;
+        
+      case "tournament_error":
+        if (window.TournamentManager) {
+          window.TournamentManager.handleTournamentError(data.message);
+        }
+        break;
+        
       default:
         console.warn("Unknown message type:", data.type);
+    }
+  }
+  
+  /**
+   * Send a message to the WebSocket server
+   * @param {Object} data - Message data to send
+   * @returns {boolean} - Success status
+   */
+  function send(data) {
+    if (!isConnected || !ws || ws.readyState !== WebSocket.OPEN) {
+      console.error("Cannot send message: WebSocket not connected");
+      return false;
+    }
+    
+    try {
+      ws.send(JSON.stringify(data));
+      return true;
+    } catch (error) {
+      console.error("Error sending message:", error);
+      return false;
     }
   }
   
@@ -315,7 +372,8 @@ const WebSocketManager = (function() {
     offWaitingListUpdate,
     isConnected: isWebSocketConnected,
     reconnect: manualReconnect,
-    disconnect
+    disconnect,
+    send // Added for tournament functionality
   };
 })();
 

@@ -56,6 +56,51 @@
       </div>
       
       <button id="leaderboard-button" data-navigate="leaderboard-page" class="button btn btn-secondary secondary mt-3 w-100" data-i18n="leaderboard">Leaderboard</button>
+      
+      <div id="tournament-section" class="mt-3">
+        <!-- Tournament creation -->
+        <button id="create-tournament" class="button btn btn-primary w-100">Create Tournament</button>
+        
+        <!-- Tournament info (when in a tournament) -->
+        <div id="active-tournament" class="card bg-transparent mt-3" style="display: none;">
+          <div class="card-body">
+            <h4 class="card-title">Tournament: <span id="tournament-name">-</span></h4>
+            <div class="tournament-controls">
+              <!-- Only tournament creator sees this -->
+              <button id="start-tournament" class="btn btn-sm btn-success mb-2" style="display: none;">
+                Start Tournament
+              </button>
+              <button id="leave-tournament" class="btn btn-sm btn-danger mb-2">
+                Leave Tournament
+              </button>
+            </div>
+            
+            <h5>Players</h5>
+            <ul id="tournament-players" class="list-group list-group-flush mb-3"></ul>
+            
+            <div id="tournament-matches">
+              <h5>Current Match</h5>
+              <div id="current-match" class="current-match-display mb-2">No active match</div>
+              
+              <h5>Upcoming Matches</h5>
+              <ul id="upcoming-matches" class="list-group list-group-flush mb-2"></ul>
+              
+              <h5>Completed Matches</h5>
+              <ul id="completed-matches" class="list-group list-group-flush"></ul>
+            </div>
+          </div>
+        </div>
+        
+        <!-- Available tournaments list -->
+        <div id="available-tournaments" class="card bg-transparent mt-3">
+          <div class="card-body">
+            <h4 class="card-title">Available Tournaments</h4>
+            <ul id="tournament-list" class="list-group list-group-flush">
+              <li class="list-group-item">No tournaments available</li>
+            </ul>
+          </div>
+        </div>
+      </div>
 
       <!-- Custom Game Page -->
       <div id="custom-game-section" class="mt-3">
@@ -281,8 +326,9 @@
   <script src="js/pong-game.js"></script>
   <script src="js/background-pong.js"></script>
   <script src="js/custom-game-manager.js"></script>
-  <script src="js/main.js"></script>
   <script src="js/player-stats-dashboard.js"></script>
   <script src="js/gdpr-manager.js"></script>
+  <script src="js/tournament-manager.js"></script>
 </body>
+  <script src="js/main.js"></script>
 </html>

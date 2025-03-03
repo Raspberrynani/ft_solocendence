@@ -127,13 +127,6 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
   
-  // Start monitoring when game becomes active
-  const originalStartPongGame = startPongGame;
-  startPongGame = function() {
-    originalStartPongGame.apply(this, arguments);
-    setupDevToolsChecks();
-  };
-  
   // -----------------------------
   // 1) Grab UI elements up front
   // -----------------------------
@@ -187,7 +180,18 @@ document.addEventListener("DOMContentLoaded", () => {
     startCustomGame: document.getElementById("start-custom-game"),
     playerStatsDashboard: document.getElementById("player-stats-dashboard"),
 
-
+    // Tournament elements
+    createTournament: document.getElementById("create-tournament"),
+    startTournament: document.getElementById("start-tournament"),
+    leaveTournament: document.getElementById("leave-tournament"),
+    activeTournament: document.getElementById("active-tournament"),
+    tournamentName: document.getElementById("tournament-name"),
+    tournamentPlayers: document.getElementById("tournament-players"),
+    currentMatch: document.getElementById("current-match"),
+    upcomingMatches: document.getElementById("upcoming-matches"),
+    completedMatches: document.getElementById("completed-matches"),
+    availableTournaments: document.getElementById("available-tournaments"),
+    tournamentList: document.getElementById("tournament-list"),
   };
   
   CustomGameManager.init(elements);
@@ -211,11 +215,12 @@ document.addEventListener("DOMContentLoaded", () => {
     roundsPlayed: 0,
     targetRounds: 3,
     gameOverHandled: false,
-    gameActive: false // Track if game is currently active
+    gameActive: false, // Track if game is currently active
+    isTournamentGame: false // Track if current game is part of a tournament
   };
   
   // Available game modes
-  const gameModes = ["Classic with queue", "Classic with AI", "Custom Game"];
+  const gameModes = ["Classic with queue", "Classic with AI", "Tournament", "Custom Game"];
   
   // -----------------------------
   // 2) Initialize modules
@@ -349,6 +354,59 @@ document.addEventListener("DOMContentLoaded", () => {
   // End game button
   elements.endGameButton.addEventListener("click", endPongGame);
   
+  // Tournament buttons (if they exist)
+  if (elements.createTournament) {
+    elements.createTournament.addEventListener('click', () => {
+      if (!WebSocketManager.isConnected()) {
+        Utils.showAlert("Cannot create tournament: Not connected to server");
+        return;
+      }
+      
+      const nickname = elements.nicknameInput.value.trim();
+      if (!nickname) {
+        Utils.showAlert("Please enter your nickname first");
+        return;
+      }
+      
+      // Get rounds from rounds input
+      const rounds = parseInt(elements.roundsInput.value) || 3;
+      
+      // Send create tournament request
+      WebSocketManager.send({
+        type: "create_tournament",
+        nickname: nickname,
+        name: `${nickname}'s Tournament`,
+        rounds: rounds
+      });
+    });
+  }
+  
+  if (elements.startTournament) {
+    elements.startTournament.addEventListener('click', () => {
+      if (window.TournamentManager && window.TournamentManager.getCurrentTournamentId()) {
+        WebSocketManager.send({
+          type: "start_tournament",
+          tournament_id: window.TournamentManager.getCurrentTournamentId()
+        });
+      } else {
+        Utils.showAlert("No active tournament");
+      }
+    });
+  }
+  
+  if (elements.leaveTournament) {
+    elements.leaveTournament.addEventListener('click', () => {
+      if (window.TournamentManager && window.TournamentManager.isInTournament()) {
+        WebSocketManager.send({
+          type: "leave_tournament"
+        });
+        window.TournamentManager.resetTournamentState();
+      } else {
+        Utils.showAlert("No active tournament");
+      }
+    });
+  }
+  
   // Fullscreen change handler
   document.addEventListener("fullscreenchange", handleFullscreenChange);
   document.addEventListener("webkitfullscreenchange", handleFullscreenChange);
@@ -471,13 +529,19 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Handle game start event
    * @param {number} rounds - Number of rounds for the game
+   * @param {boolean} isTournament - Whether this is a tournament game
    */
-  function handleGameStart(rounds) {
+  function handleGameStart(rounds, isTournament = false) {
     elements.pongStatus.innerText = "";
     if (rounds) {
       appState.targetRounds = rounds;
       elements.targetRounds.innerText = rounds;
     }
+    
+    // Set tournament game flag
+    appState.isTournamentGame = isTournament;
+    
+    // Start the game
     startPongGame();
   }
   
@@ -499,7 +563,22 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!appState.gameOverHandled && (appState.roundsPlayed >= appState.targetRounds || score >= appState.targetRounds)) {
       appState.gameOverHandled = true;
       appState.gameActive = false; // Game is no longer active
-      endPongGame();
+      
+      // If this is a tournament game, return to the tournament page after ending
+      if (appState.isTournamentGame && window.TournamentManager && window.TournamentManager.isInTournament()) {
+        PongGame.stop();
+        
+        // Send game over to WebSocket to notify tournament system
+        WebSocketManager.sendGameOver(appState.roundsPlayed);
+        
+        // Exit fullscreen if active
+        exitFullscreen();
+        
+        // Navigate back to game page where tournament UI is
+        UIManager.navigateTo("game-page");
+      } else {
+        endPongGame();
+      }
     }
   }
   
@@ -532,7 +611,13 @@ document.addEventListener("DOMContentLoaded", () => {
   function handleOpponentLeft(message) {
     appState.gameActive = false; // Game is no longer active
     Utils.showAlert(message);
-    UIManager.navigateTo("game-page");
+    
+    // If this is a tournament game and we're in a tournament, go back to tournament view
+    if (appState.isTournamentGame && window.TournamentManager && window.TournamentManager.isInTournament()) {
+      UIManager.navigateTo("game-page");
+    } else {
+      UIManager.navigateTo("game-page");
+    }
   }
   
   /**
@@ -639,7 +724,37 @@ document.addEventListener("DOMContentLoaded", () => {
     const selectedMode = gameModes[appState.currentGameModeIndex];
     
     // Handle different game modes using UIManager for navigation
-    if (selectedMode === "Custom Game") {
+    // In handleStartGame function, when Tournament mode is selected:
+if (selectedMode === "Tournament") {
+  // Check if TournamentManager exists
+  if (!window.TournamentManager) {
+    console.error("TournamentManager not found! Make sure tournament-manager.js is loaded.");
+    Utils.showAlert("Tournament functionality unavailable. Please try again later.");
+    return;
+  }
+  
+  console.log("Initializing Tournament Manager...");
+  // Initialize Tournament Manager with proper elements and nickname
+  window.TournamentManager.init(elements, nickname);
+  
+  // Navigate to game page
+  UIManager.navigateTo("game-page");
+  
+  // Make sure tournament sections are visible
+  if (elements.availableTournaments) {
+    elements.availableTournaments.style.display = 'block';
+  }
+  
+  // Request latest tournament list
+  if (WebSocketManager.isConnected()) {
+    console.log("Requesting tournament list...");
+    WebSocketManager.send({
+      type: "get_tournaments"
+    });
+  } else {
+    Utils.showAlert(LocalizationManager.get("connectionError"));
+  }
+} else if (selectedMode === "Custom Game") {
       // Navigate to custom game page instead of starting game
       UIManager.navigateTo("custom-game-page");
     } else if (selectedMode === "Classic with AI") {
@@ -751,105 +866,292 @@ document.addEventListener("DOMContentLoaded", () => {
   /**
    * Fetch and update the leaderboard
    */
-  // async function updateLeaderboard() {
-  //   try {
-  //     Utils.showLoading(elements.leaderboardList);
+  async function updateLeaderboard() {
+    try {
+      Utils.showLoading(elements.leaderboardList);
       
-  //     const apiUrl = `${getApiBaseUrl()}/entries/`;
-  //     console.log("Fetching leaderboard from:", apiUrl);
+      const apiUrl = `${getApiBaseUrl()}/entries/`;
+      console.log("Fetching leaderboard from:", apiUrl);
       
-  //     const response = await fetch(apiUrl);
+      const response = await fetch(apiUrl);
       
-  //     if (!response.ok) {
-  //       throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-  //     }
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
       
-  //     const data = await response.json();
+      const data = await response.json();
       
-  //     elements.leaderboardList.innerHTML = "";
+      elements.leaderboardList.innerHTML = "";
       
-  //     if (!data.entries || data.entries.length === 0) {
-  //       const li = document.createElement("li");
-  //       li.innerText = "No entries yet";
-  //       elements.leaderboardList.appendChild(li);
-  //       return;
-  //     }
+      if (!data.entries || data.entries.length === 0) {
+        const li = document.createElement("li");
+        li.innerText = "No entries yet";
+        elements.leaderboardList.appendChild(li);
+        return;
+      }
       
-  //     data.entries.sort((a, b) => b.wins - a.wins);
+      // Sort entries by wins
+      data.entries.sort((a, b) => b.wins - a.wins);
       
-  //     data.entries.forEach(entry => {
-  //       const li = document.createElement("li");
-  //       li.classList.add(`rank-${entry.rank}`);
-  //       li.innerHTML = `
-  //         <span class="player-name" data-player="${Utils.sanitizeHTML(entry.name)}">
-  //           ${Utils.sanitizeHTML(entry.name)}
-  //         </span> 
-  //         <span class="player-stats">
-  //           Wins: ${entry.wins} | Games: ${entry.games_played} | Win Rate: ${entry.win_ratio}%
-  //         </span>
-  //       `;
+      // Add a title/header for the leaderboard
+      const header = document.createElement("li");
+      header.className = "leaderboard-header";
+      header.innerHTML = `
+        <div class="d-flex justify-content-between w-100 py-2">
+          <span><strong>Player</strong></span>
+          <span><strong>Stats</strong></span>
+        </div>
+      `;
+      elements.leaderboardList.appendChild(header);
+      
+      // Create player entries
+      data.entries.forEach((entry, index) => {
+        const li = document.createElement("li");
+        li.classList.add(`rank-${entry.rank}`);
         
-  //       // Add click event to show player details
-  //       li.querySelector('.player-name').addEventListener('click', () => showPlayerDetails(entry.name));
+        // Add 'top3' class for the top 3 players
+        if (index < 3) {
+          li.classList.add(`top-${index + 1}`);
+        }
         
-  //       elements.leaderboardList.appendChild(li);
-  //     });
-  //   } catch (error) {
-  //     console.error("Error fetching leaderboard:", error);
-  //     elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
-  //   }
-  // }
+        // Calculate win/loss ratio visual indicator width
+        const winRatioWidth = Math.max(5, entry.win_ratio); // Min 5% for visibility
+        
+        li.innerHTML = `
+          <div class="d-flex justify-content-between w-100 align-items-center">
+            <span class="player-name" data-player="${Utils.sanitizeHTML(entry.name)}">
+              ${index < 3 ? `<span class="position-indicator">${index + 1}</span>` : ''}
+              ${Utils.sanitizeHTML(entry.name)}
+            </span> 
+            <span class="player-stats">
+              <span class="badge bg-success">${entry.wins} W</span>
+              <span class="badge bg-secondary">${entry.games_played} G</span>
+            </span>
+          </div>
+          <div class="win-ratio-bar mt-1">
+            <div class="win-ratio-progress" style="width: ${winRatioWidth}%" title="${entry.win_ratio}% Win Rate"></div>
+          </div>
+        `;
+        
+        // Add click event to show player details
+        li.querySelector('.player-name').addEventListener('click', () => showPlayerDetails(entry.name));
+        
+        elements.leaderboardList.appendChild(li);
+      });
+      
+      // Add leaderboard description at the bottom
+      const footer = document.createElement("li");
+      footer.className = "leaderboard-footer";
+      footer.innerHTML = `
+        <small class="text-muted">
+          Click on a player's name to see detailed statistics
+        </small>
+      `;
+      elements.leaderboardList.appendChild(footer);
+      
+    } catch (error) {
+      console.error("Error fetching leaderboard:", error);
+      elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
+    }
+  }
 
   /**
    * Fetch and display detailed player stats
    * @param {string} playerName - Name of the player to fetch stats for
    */
-  // async function showPlayerDetails(playerName) {
-  //   try {
-  //     const apiUrl = `${getApiBaseUrl()}/player/${playerName}/`;
-  //     const response = await fetch(apiUrl);
+  async function showPlayerDetails(playerName) {
+    try {
+      const apiUrl = `${getApiBaseUrl()}/player/${playerName}/`;
+      const response = await fetch(apiUrl);
       
-  //     if (!response.ok) {
-  //       throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-  //     }
+      if (!response.ok) {
+        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
+      }
       
-  //     const playerStats = await response.json();
+      const playerStats = await response.json();
       
-  //     // Create a modal or overlay to show detailed stats
-  //     const statsModal = document.createElement('div');
-  //     statsModal.className = 'modal player-stats-modal';
-  //     statsModal.innerHTML = `
-  //       <div class="modal-content">
-  //         <h2>${Utils.sanitizeHTML(playerStats.name)}'s Stats</h2>
-  //         <div class="player-details">
-  //           <p>Total Games: ${playerStats.games_played}</p>
-  //           <p>Total Wins: ${playerStats.wins}</p>
-  //           <p>Win Ratio: ${playerStats.win_ratio}%</p>
-  //           <p>Rank: <span class="rank-badge rank-${playerStats.rank}">${playerStats.rank.toUpperCase()}</span></p>
-  //         </div>
-  //         <button class="close-modal">Close</button>
-  //       </div>
-  //     `;
+      // Create a modal or overlay to show detailed stats
+      const statsModal = document.createElement('div');
+      statsModal.className = 'modal player-stats-modal';
       
-  //     // Add close functionality
-  //     statsModal.querySelector('.close-modal').addEventListener('click', () => {
-  //       statsModal.remove();
-  //     });
+      // Calculate win/loss data for the chart
+      const wins = playerStats.wins;
+      const losses = playerStats.games_played - playerStats.wins;
       
-  //     // Close modal when clicking outside
-  //     statsModal.addEventListener('click', (e) => {
-  //       if (e.target === statsModal) {
-  //         statsModal.remove();
-  //       }
-  //     });
+      statsModal.innerHTML = `
+        <div class="modal-content">
+          <h2>${Utils.sanitizeHTML(playerStats.name)}'s Stats</h2>
+          
+          <!-- Stats Summary -->
+          <div class="player-details mb-3">
+            <div class="row text-center">
+              <div class="col">
+                <div class="stat-card">
+                  <div class="stat-value">${playerStats.games_played}</div>
+                  <div class="stat-label">Total Games</div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="stat-card">
+                  <div class="stat-value">${playerStats.wins}</div>
+                  <div class="stat-label">Wins</div>
+                </div>
+              </div>
+              <div class="col">
+                <div class="stat-card">
+                  <div class="stat-value">${playerStats.win_ratio}%</div>
+                  <div class="stat-label">Win Rate</div>
+                </div>
+              </div>
+            </div>
+            <div class="text-center mt-3">
+              <span class="rank-badge rank-${playerStats.rank}">
+                ${playerStats.rank.toUpperCase()} RANK
+              </span>
+            </div>
+          </div>
+          
+          <!-- Win/Loss Chart -->
+          <div class="chart-container">
+            <canvas id="winLossChart" width="250" height="150"></canvas>
+          </div>
+          
+          <!-- Performance Summary -->
+          <div class="performance-summary mt-3">
+            <h4>Performance Summary</h4>
+            <div class="progress mb-2">
+              <div 
+                class="progress-bar bg-success" 
+                role="progressbar" 
+                style="width: ${playerStats.win_ratio}%" 
+                aria-valuenow="${playerStats.win_ratio}" 
+                aria-valuemin="0" 
+                aria-valuemax="100">
+                ${playerStats.win_ratio}% Wins
+              </div>
+            </div>
+            <p class="text-center">
+              ${getPlayerSummary(playerStats)}
+            </p>
+          </div>
+          
+          <button class="close-modal btn btn-primary mt-3">Close</button>
+        </div>
+      `;
       
-  //     // Add to body
-  //     document.body.appendChild(statsModal);
-  //   } catch (error) {
-  //     console.error("Error fetching player details:", error);
-  //     Utils.showAlert(`Could not fetch stats for ${playerName}`);
-  //   }
-  // }
+      // Add close functionality
+      statsModal.querySelector('.close-modal').addEventListener('click', () => {
+        statsModal.remove();
+      });
+      
+      // Close modal when clicking outside
+      statsModal.addEventListener('click', (e) => {
+        if (e.target === statsModal) {
+          statsModal.remove();
+        }
+      });
+      
+      // Add to body
+      document.body.appendChild(statsModal);
+      
+      // Create the chart after the modal is in the DOM
+      createWinLossChart(wins, losses);
+      
+    } catch (error) {
+      console.error("Error fetching player details:", error);
+      Utils.showAlert(`Could not fetch stats for ${playerName}`);
+    }
+  }
+  
+  /**
+   * Create a simple win/loss doughnut chart
+   * @param {number} wins - Number of wins
+   * @param {number} losses - Number of losses
+   */
+  function createWinLossChart(wins, losses) {
+    const ctx = document.getElementById('winLossChart').getContext('2d');
+    
+    // Simple chart using canvas (without Chart.js)
+    // Clear canvas
+    ctx.clearRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    
+    // Colors
+    const winColor = '#28a745';  // Green
+    const lossColor = '#dc3545'; // Red
+    
+    // Calculate angles for pie slices
+    const total = wins + losses;
+    const winAngle = wins / total * Math.PI * 2;
+    const lossAngle = losses / total * Math.PI * 2;
+    
+    // Set up chart parameters
+    const centerX = ctx.canvas.width / 2;
+    const centerY = ctx.canvas.height / 2;
+    const radius = Math.min(centerX, centerY) - 10;
+    const innerRadius = radius * 0.6; // For donut hole
+    
+    // Draw donut slices
+    // Wins slice
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, 0, winAngle, false);
+    ctx.lineTo(centerX, centerY);
+    ctx.fillStyle = winColor;
+    ctx.fill();
+    
+    // Losses slice
+    ctx.beginPath();
+    ctx.moveTo(centerX, centerY);
+    ctx.arc(centerX, centerY, radius, winAngle, Math.PI * 2, false);
+    ctx.lineTo(centerX, centerY);
+    ctx.fillStyle = lossColor;
+    ctx.fill();
+    
+    // Draw donut hole
+    ctx.beginPath();
+    ctx.arc(centerX, centerY, innerRadius, 0, Math.PI * 2, false);
+    ctx.fillStyle = '#000';
+    ctx.fill();
+    
+    // Draw legend
+    const legendY = centerY + radius + 20;
+    
+    // Wins legend
+    ctx.fillStyle = winColor;
+    ctx.fillRect(centerX - 70, legendY, 15, 15);
+    ctx.fillStyle = '#fff';
+    ctx.font = '12px Arial';
+    ctx.textAlign = 'left';
+    ctx.fillText(`Wins: ${wins}`, centerX - 50, legendY + 12);
+    
+    // Losses legend
+    ctx.fillStyle = lossColor;
+    ctx.fillRect(centerX + 10, legendY, 15, 15);
+    ctx.fillStyle = '#fff';
+    ctx.fillText(`Losses: ${losses}`, centerX + 30, legendY + 12);
+  }
+  
+  /**
+   * Generate a personalized summary based on player stats
+   * @param {Object} stats - Player statistics
+   * @returns {string} - Performance summary text
+   */
+  function getPlayerSummary(stats) {
+    const games = stats.games_played;
+    const winRatio = stats.win_ratio;
+    
+    if (games < 5) {
+      return "Not enough games to determine a pattern. Keep playing!";
+    } else if (winRatio >= 70) {
+      return "Exceptional performance! You're dominating the game!";
+    } else if (winRatio >= 50) {
+      return "Good performance! You're winning more than losing.";
+    } else if (winRatio >= 30) {
+      return "You're improving, but need more practice to get a positive win ratio.";
+    } else {
+      return "Keep practicing to improve your win rate!";
+    }
+  }
   
   /**
    * Start the Pong game
@@ -902,27 +1204,32 @@ document.addEventListener("DOMContentLoaded", () => {
             // Initialize mobile joystick if on mobile device
             if (Utils.isMobileDevice()) {
               const canvas = document.getElementById('pong-canvas');
-              MobileJoystick.init(canvas, (paddleY) => {
-                // Update local paddle and send to server if multiplayer
-                PongGame.updateLocalPaddle(paddleY);
-                if (appState.isMultiplayer) {
-                  WebSocketManager.sendPaddleUpdate(paddleY);
-                }
-              });
+              if (window.MobileJoystick) {
+                window.MobileJoystick.init(canvas, (paddleY) => {
+                  // Update local paddle and send to server if multiplayer
+                  if (PongGame.updateLocalPaddle) {
+                    PongGame.updateLocalPaddle(paddleY);
+                  }
+                  
+                  if (appState.isMultiplayer) {
+                    WebSocketManager.sendPaddleUpdate(paddleY);
+                  }
+                });
+              }
             }
           },
           onGameEnd: () => {
             // Destroy mobile joystick when game ends
-            if (Utils.isMobileDevice()) {
-              MobileJoystick.destroy();
+            if (Utils.isMobileDevice() && window.MobileJoystick) {
+              window.MobileJoystick.destroy();
             }
           },
           onFullscreenChange: (isFullscreen) => {
             // Update control enabled state based on fullscreen
-            if (Utils.isMobileDevice() && !isFullscreen) {
+            if (Utils.isMobileDevice() && window.MobileJoystick && !isFullscreen) {
               // Recreate joystick if needed
               const canvas = document.getElementById('pong-canvas');
-              MobileJoystick.init(canvas);
+              window.MobileJoystick.init(canvas);
             }
           }
         }
@@ -953,7 +1260,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }, 100);
   }
 
-function startCustomGameWithSettings(customSettings) {
+  function startCustomGameWithSettings(customSettings) {
     appState.isMultiplayer = false; // Custom games are single player for now
     
     // Navigate to pong page
@@ -967,7 +1274,6 @@ function startCustomGameWithSettings(customSettings) {
   /**
    * End the Pong game
    */
-  
   async function endPongGame() {
     console.log("Ending game...");
     
@@ -1002,11 +1308,26 @@ function startCustomGameWithSettings(customSettings) {
 
         const result = await response.json();
         
-        // Show game result toast
-        if (result.winner) {
-          Utils.showToast(LocalizationManager.get("gameWon"), "success");
+        // Check if this was a tournament game
+        if (appState.isTournamentGame && window.TournamentManager && window.TournamentManager.isInTournament()) {
+          // Send game over to WebSocket to notify tournament system
+          WebSocketManager.sendGameOver(appState.roundsPlayed);
+          
+          // Navigate back to game page where tournament UI is
+          UIManager.navigateTo("game-page");
         } else {
-          Utils.showToast(LocalizationManager.get("gameLost"), "warning");
+          // Show game result toast for non-tournament games
+          if (result.winner) {
+            Utils.showToast(LocalizationManager.get("gameWon"), "success");
+          } else {
+            Utils.showToast(LocalizationManager.get("gameLost"), "warning");
+          }
+          
+          // Update UI
+          elements.endGameButton.classList.add("hidden");
+          
+          // Navigate to leaderboard for non-tournament games
+          UIManager.navigateTo("leaderboard-page");
         }
       } catch (error) {
         console.error("Error ending game:", error);
@@ -1016,133 +1337,16 @@ function startCustomGameWithSettings(customSettings) {
       // For non-multiplayer games (AI or custom), do not record
       console.log("Not recording game result for non-multiplayer mode");
       Utils.showToast("Custom/AI game completed", "info");
+      
+      // Update UI
+      elements.endGameButton.classList.add("hidden");
+      
+      // Navigate to leaderboard for non-tournament games
+      UIManager.navigateTo("leaderboard-page");
     }
     
     // Exit fullscreen if active
-    if (document.fullscreenElement || 
-        document.webkitFullscreenElement || 
-        document.mozFullScreenElement || 
-        document.msFullscreenElement) {
-      try {
-        if (document.exitFullscreen) {
-          document.exitFullscreen();
-        } else if (document.webkitExitFullscreen) {
-          document.webkitExitFullscreen();
-        } else if (document.mozCancelFullScreen) {
-          document.mozCancelFullScreen();
-        } else if (document.msExitFullscreen) {
-          document.msExitFullscreen();
-        }
-      } catch (e) {
-        console.error("Error exiting fullscreen:", e);
-      }
-    }
-    
-    // Update UI
-    elements.endGameButton.classList.add("hidden");
-    
-    // Use UIManager to navigate to leaderboard with browser history support
-    UIManager.navigateTo("leaderboard-page");
-  }
-
-  async function updateLeaderboard() {
-    try {
-      Utils.showLoading(elements.leaderboardList);
-      
-      const apiUrl = `${getApiBaseUrl()}/entries/`;
-      console.log("Fetching leaderboard from:", apiUrl);
-      
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      
-      elements.leaderboardList.innerHTML = "";
-      
-      if (!data.entries || data.entries.length === 0) {
-        const li = document.createElement("li");
-        li.innerText = "No entries yet";
-        elements.leaderboardList.appendChild(li);
-        return;
-      }
-      
-      data.entries.sort((a, b) => b.wins - a.wins);
-      
-      data.entries.forEach(entry => {
-        const li = document.createElement("li");
-        li.classList.add(`rank-${entry.rank}`);
-        li.innerHTML = `
-          <span class="player-name" data-player="${Utils.sanitizeHTML(entry.name)}">
-            ${Utils.sanitizeHTML(entry.name)}
-          </span> 
-          <span class="player-stats">
-            Wins: ${entry.wins} | Games: ${entry.games_played} | Win Rate: ${entry.win_ratio}%
-          </span>
-        `;
-        
-        // Add click event to show player details
-        li.querySelector('.player-name').addEventListener('click', () => showPlayerDetails(entry.name));
-        
-        elements.leaderboardList.appendChild(li);
-      });
-    } catch (error) {
-      console.error("Error fetching leaderboard:", error);
-      elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
-    }
-  }
-
-  /**
-   * Fetch and display detailed player stats
-   * @param {string} playerName - Name of the player to fetch stats for
-   */
-  async function showPlayerDetails(playerName) {
-    try {
-      const apiUrl = `${getApiBaseUrl()}/player/${playerName}/`;
-      const response = await fetch(apiUrl);
-      
-      if (!response.ok) {
-        throw new Error(`Server returned ${response.status}: ${response.statusText}`);
-      }
-      
-      const playerStats = await response.json();
-      
-      // Create a modal or overlay to show detailed stats
-      const statsModal = document.createElement('div');
-      statsModal.className = 'modal player-stats-modal';
-      statsModal.innerHTML = `
-        <div class="modal-content">
-          <h2>${Utils.sanitizeHTML(playerStats.name)}'s Stats</h2>
-          <div class="player-details">
-            <p>Total Games: ${playerStats.games_played}</p>
-            <p>Total Wins: ${playerStats.wins}</p>
-            <p>Win Ratio: ${playerStats.win_ratio}%</p>
-            <p>Rank: <span class="rank-badge rank-${playerStats.rank}">${playerStats.rank.toUpperCase()}</span></p>
-          </div>
-          <button class="close-modal">Close</button>
-        </div>
-      `;
-      
-      // Add close functionality
-      statsModal.querySelector('.close-modal').addEventListener('click', () => {
-        statsModal.remove();
-      });
-      
-      // Close modal when clicking outside
-      statsModal.addEventListener('click', (e) => {
-        if (e.target === statsModal) {
-          statsModal.remove();
-        }
-      });
-      
-      // Add to body
-      document.body.appendChild(statsModal);
-    } catch (error) {
-      console.error("Error fetching player details:", error);
-      Utils.showAlert(`Could not fetch stats for ${playerName}`);
-    }
+    exitFullscreen();
   }
   
   /**
@@ -1162,6 +1366,31 @@ function startCustomGameWithSettings(customSettings) {
       }
     } catch (e) {
       console.error("Error entering fullscreen:", e);
+    }
+  }
+  
+  /**
+   * Exit fullscreen mode
+   */
+  function exitFullscreen() {
+    try {
+      if (document.fullscreenElement || 
+          document.webkitFullscreenElement || 
+          document.mozFullScreenElement || 
+          document.msFullscreenElement) {
+        
+        if (document.exitFullscreen) {
+          document.exitFullscreen();
+        } else if (document.webkitExitFullscreen) {
+          document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+          document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+          document.msExitFullscreen();
+        }
+      }
+    } catch (e) {
+      console.error("Error exiting fullscreen:", e);
     }
   }
   
