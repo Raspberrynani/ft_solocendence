@@ -229,12 +229,12 @@ const UIManager = (function() {
      * @param {boolean} show - Whether to show the button
      */
     function toggleStartButton(show) {
-      if (!elements.startGameButton) {
+      if (!elements.startGame) {
         console.error('Start game button element not found');
         return;
       }
       
-      toggleElement(elements.startGameButton, show);
+      toggleElement(elements.startGame, show);
     }
     
     /**
@@ -617,3 +617,5 @@ const UIManager = (function() {
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = UIManager;
   }
+
+  window.UIManager = UIManager;

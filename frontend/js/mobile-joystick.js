@@ -278,3 +278,5 @@ const MobileJoystick = (function() {
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = MobileJoystick;
   }
+
+  window.MobileJoystick = MobileJoystick;

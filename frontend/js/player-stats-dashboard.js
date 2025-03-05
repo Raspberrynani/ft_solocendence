@@ -289,3 +289,10 @@ async function showPlayerDetails(playerName) {
       elements.leaderboardList.innerHTML = "<li>Error loading leaderboard</li>";
     }
   }
+
+  window.PlayerStatsDashboard = {
+    showPlayerDetails,
+    updateLeaderboard
+  };
+
+  window.PlayerStatsDashboard = PlayerStatsDashboard;

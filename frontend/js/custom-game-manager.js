@@ -474,3 +474,5 @@ const CustomGameManager = (function() {
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = CustomGameManager;
   }
+
+  window.CustomGameManager = CustomGameManager;

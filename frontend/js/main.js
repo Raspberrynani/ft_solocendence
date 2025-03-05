@@ -1964,3 +1964,5 @@ document.addEventListener('DOMContentLoaded', function() {
         document.body.appendChild(errorDiv);
     });
 });
+
+window.App = App;

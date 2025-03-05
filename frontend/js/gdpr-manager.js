@@ -328,3 +328,5 @@ document.addEventListener('DOMContentLoaded', function() {
     });
   });
 });
+
+window.GDPRManager = GDPRManager;

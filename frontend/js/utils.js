@@ -520,3 +520,5 @@ const Utils = (function() {
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = Utils;
   }
+
+  window.Utils = Utils;

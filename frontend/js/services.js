@@ -495,3 +495,8 @@ const ErrorHandler = (function() {
       ApiService.init();
     }
   });
+
+  window.ErrorHandler = ErrorHandler;
+  window.ApiService = ApiService;
+  window.DevToolsDetector = DevToolsDetector;
+  window.LocalStorageService = LocalStorageService;

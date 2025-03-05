@@ -185,3 +185,5 @@ const LocalizationManager = (function() {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = LocalizationManager;
 }
+
+window.LocalizationManager = LocalizationManager;

@@ -490,3 +490,5 @@ const WebSocketManager = (function() {
   if (typeof module !== 'undefined' && module.exports) {
     module.exports = WebSocketManager;
   }
+
+  window.WebSocketManager = WebSocketManager;
