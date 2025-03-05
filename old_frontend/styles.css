@@ -1,11 +1,6 @@
-/* 
- * Optimized styles.css
- * This version leverages Bootstrap utility classes more effectively
- * and organizes styles into logical sections
- */
-
-/* ---------- GENERAL STYLES ---------- */
+/* General Page Styling with animated background */
 body {
+    /* Remove the background image since we'll use canvas */
     background-color: #000 !important;
     font-family: 'Arial', sans-serif !important;
     color: #87CEEB !important;
@@ -17,8 +12,19 @@ body {
     align-items: center;
     overflow: hidden; /* Prevent scrollbars */
     touch-action: none; /* Prevent default touch behaviors */
+}
+
+  /* Mobile Joystick Specific Styles */
+  #mobile-joystick {
+    display: none; /* Hidden by default */
   }
-  
+
+  @media (max-width: 768px) {
+    #mobile-joystick {
+      display: block; /* Show on mobile devices */
+    }
+  }
+
   /* Prevent text selection and overscroll on mobile */
   html, body {
     -webkit-user-select: none;
@@ -27,62 +33,57 @@ body {
     user-select: none;
     overscroll-behavior: none;
   }
-  
+
   /* Disable double-tap zoom */
   html {
     touch-action: manipulation;
   }
-  
-  /* Canvas background */
-  #background-pong {
+
+
+/* Canvas background */
+#background-pong {
     position: fixed;
     top: 0;
     left: 0;
     width: 100vw;
     height: 100vh;
     z-index: -1;
-  }
-  
-  /* App Container - Override Bootstrap container-fluid */
-  #app {
+}
+
+/* App Container - Override Bootstrap container-fluid */
+#app {
     width: 80% !important;
     max-width: 400px !important;
     padding: 20px !important;
     border-radius: 20px !important;
-    background: rgba(0, 0, 0, 0.7) !important;
+    background: rgba(0, 0, 0, 0.7) !important; /* Darker background for better contrast */
     backdrop-filter: blur(5px) !important;
     box-shadow: 0 4px 20px rgba(0, 212, 255, 0.3) !important;
     margin: 0 auto !important;
-    position: relative;
+    position: relative; /* Keep above the background */
     z-index: 10;
-  }
-  
-  /* ---------- PAGE TRANSITIONS ---------- */
-  .page {
+}
+
+/* Pages */
+.page {
     display: none;
     animation: fadeIn 0.5s ease-in-out;
     text-align: center;
-  }
-  
-  .page.active {
+}
+.page.active {
     display: block;
-  }
-  
-  @keyframes fadeIn {
-    from { opacity: 0; transform: scale(0.95); }
-    to { opacity: 1; transform: scale(1); }
-  }
-  
-  /* ---------- TYPOGRAPHY ---------- */
-  h2 {
+}
+
+/* Headings */
+h2 {
     font-size: 24px !important;
     margin-bottom: 15px !important;
     color: #87CEEB !important;
     text-shadow: 0 0 10px rgba(135, 206, 235, 0.5) !important;
-  }
-  
-  /* ---------- BUTTONS ---------- */
-  .button {
+}
+
+/* Buttons - Add Bootstrap classes but keep custom styling */
+.button {
     display: block;
     width: 100%;
     padding: 15px !important;
@@ -97,40 +98,39 @@ body {
     transition: transform 0.2s ease, 
                 box-shadow 0.2s ease,
                 opacity 0.5s ease-in-out !important;
-  }
-  
-  .button:hover {
+}
+.button:hover {
     transform: scale(1.05);
     box-shadow: 0 4px 15px rgba(0, 212, 255, 0.7);
-  }
-  
-  .button.secondary {
+}
+.button.secondary {
     background: linear-gradient(90deg, #ff758c, #ff7eb3) !important;
-  }
-  
-  .button.debug {
+}
+.button.debug {
     position: absolute;
     top: 5px;
     right: 5px;
     font-size: 12px;
     background: #444 !important;
-  }
-  
-  .button.disabled {
-    opacity: 0.5 !important;
-    cursor: not-allowed !important;
-    pointer-events: none !important;
-    background: linear-gradient(90deg, #555, #777) !important;
-  }
-  
-  .hidden {
+}
+.hidden {
     opacity: 0;
     pointer-events: none;
     /* Do not use display: none to allow for opacity transitions */
-  }
-  
-  /* ---------- FORM ELEMENTS ---------- */
-  .nickname-input, .rounds-input, .form-control, .form-select {
+}
+
+/* Bootstrap button overrides */
+.btn-primary {
+    background: linear-gradient(90deg, #007bff, #00d4ff) !important;
+    border: none !important;
+}
+.btn-secondary {
+    background: linear-gradient(90deg, #ff758c, #ff7eb3) !important;
+    border: none !important;
+}
+
+/* Nickname & Rounds Input - Override Bootstrap form controls */
+.nickname-input, .rounds-input, .form-control, .form-select {
     width: 80% !important;
     display: block !important;
     margin: 0 auto 15px !important;
@@ -143,43 +143,60 @@ body {
     color: #ffffff !important;
     outline: none !important;
     transition: border 0.3s ease-in-out !important;
-  }
-  
-  .nickname-input::placeholder, .rounds-input::placeholder, 
-  .form-control::placeholder, .form-select::placeholder {
+}
+.nickname-input::placeholder, .rounds-input::placeholder, 
+.form-control::placeholder, .form-select::placeholder {
     color: rgba(255, 255, 255, 0.5) !important;
-  }
-  
-  .nickname-input:focus, .rounds-input:focus,
-  .form-control:focus, .form-select:focus {
+}
+.nickname-input:focus, .rounds-input:focus,
+.form-control:focus, .form-select:focus {
     border: 2px solid #00d4ff !important;
     box-shadow: 0 0 15px rgba(0, 212, 255, 0.5) !important;
-  }
-  
-  /* Override form select options */
-  .form-select option {
+}
+
+/* Override form select options */
+.form-select option {
     background-color: #2a2a2a !important;
     color: white !important;
-  }
-  
-  /* ---------- GAME INTERFACE ---------- */
-  /* Join Game Button Container */
-  .queue-wrapper {
+}
+
+/* Join Game Button Container */
+.queue-wrapper {
     display: flex;
     align-items: center;
     justify-content: center;
     margin: 15px 0;
-  }
-  
-  .queue-wrapper i {
+}
+
+
+/* Fix for button visibility */
+.button.hidden {
+    opacity: 0;
+    pointer-events: none;
+}
+
+/* But make sure the button is actually shown when not hidden */
+#start-game {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity 0.5s ease-in-out;
+}
+
+/* When hidden, apply the transition */
+#start-game.hidden {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.5s ease-in-out;
+}
+
+.queue-wrapper i {
     font-size: 24px;
     cursor: pointer;
     margin: 0 10px;
     color: #00d4ff;
     text-shadow: 0 0 10px rgba(0, 212, 255, 0.7);
-  }
-  
-  .join-game-button {
+}
+.join-game-button {
     display: flex;
     flex-direction: column;
     align-items: center;
@@ -198,25 +215,22 @@ body {
     /* Starting with zero opacity allows for fade in */
     opacity: 0;
     pointer-events: none; /* Disable interaction when invisible */
-  }
-  
-  .join-game-button.visible {
+}
+.join-game-button.visible {
     opacity: 1;
     pointer-events: auto; /* Enable interaction when visible */
-  }
-  
-  .join-game-button .button-text {
+}
+.join-game-button .button-text {
     line-height: 1.2;
-  }
-  
-  .join-game-button .game-mode-indicator {
+}
+.join-game-button .game-mode-indicator {
     font-size: 12px;
     margin-top: 4px;
     opacity: 0.8;
-  }
-  
-  /* ---------- PONG CANVAS ---------- */
-  #pong-canvas {
+}
+
+/* Pong Canvas */
+#pong-canvas {
     width: 100%;
     height: 300px;
     background: #000;
@@ -227,107 +241,79 @@ body {
     transition: all 0.5s ease;
     box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
     cursor: pointer;
-  }
-  
-  /* Important: When in fullscreen, maximize the canvas */
-  #pong-canvas:fullscreen,
-  #pong-canvas:-webkit-full-screen,
-  #pong-canvas:-moz-full-screen,
-  #pong-canvas:-ms-fullscreen {
+}
+
+/* Important: When in fullscreen, maximize the canvas */
+#pong-canvas:fullscreen,
+#pong-canvas:-webkit-full-screen,
+#pong-canvas:-moz-full-screen,
+#pong-canvas:-ms-fullscreen {
     width: 100vw !important;
     height: 100vh !important;
     border: none !important;
     border-radius: 0 !important;
     margin: 0 !important;
     padding: 0 !important;
-  }
-  
-  /* ---------- CARD & LIST STYLES ---------- */
-  /* Override Bootstrap card styles */
-  .card {
+}
+
+/* Override Bootstrap card styles */
+.card {
     background: rgba(0, 0, 0, 0.6) !important;
     border-radius: 10px !important;
     border: 1px solid rgba(0, 212, 255, 0.2) !important;
     box-shadow: 0 0 15px rgba(0, 212, 255, 0.1) !important;
-  }
-  
-  .card-body {
+}
+.card-body {
     padding: 10px !important;
-  }
-  
-  .card-title {
+}
+.card-title {
     margin: 0 0 5px !important;
     font-size: 16px !important;
     color: #87CEEB !important;
-  }
-  
-  /* Override list group styles */
-  .list-group {
+}
+
+/* Override list group styles */
+.list-group {
     background: transparent !important;
-  }
-  
-  .list-group-item {
+}
+.list-group-item {
     background: transparent !important;
     border: none !important;
     color: #fff !important;
     padding: 2px 0 !important;
+}
+
+/* CRT Zoom Animation */
+@keyframes crtZoom {
+  0% {
+    transform: scale(0.5);
+    opacity: 0;
   }
-  
-  /* ---------- ANIMATIONS ---------- */
-  /* CRT Zoom Animation */
-  @keyframes crtZoom {
-    0% {
-      transform: scale(0.5);
-      opacity: 0;
-    }
-    50% {
-      transform: scale(1.05);
-      opacity: 1;
-    }
-    100% {
-      transform: scale(1);
-    }
+  50% {
+    transform: scale(1.05);
+    opacity: 1;
   }
-  
-  #pong-canvas.crt-zoom {
-    animation: crtZoom 1s ease-out;
+  100% {
+    transform: scale(1);
   }
-  
-  /* Pulse animation for join button */
-  @keyframes pulse {
-    0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
-    50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(0, 212, 255, 0.6); }
-  }
-  
-  .pulse {
-    animation: pulse 1.5s ease-in-out;
-  }
-  
-  /* Add a subtle glow effect to important elements */
-  h2, h3, .button, #pong-canvas {
-    animation: glow 4s infinite alternate;
-  }
-  
-  @keyframes glow {
-    from { box-shadow: 0 0 5px rgba(0, 212, 255, 0.1); }
-    to { box-shadow: 0 0 15px rgba(0, 212, 255, 0.4); }
-  }
-  
-  /* ---------- WAITING PLAYERS SECTION ---------- */
-  #waiting-players-container {
+}
+#pong-canvas.crt-zoom {
+  animation: crtZoom 1s ease-out;
+}
+
+/* Waiting Players Section */
+#waiting-players-container {
     margin: 15px 0;
     background: rgba(0, 0, 0, 0.6);
     padding: 10px;
     border-radius: 10px;
     border: 1px solid rgba(0, 212, 255, 0.2);
-  }
-  
-  #waiting-players-container h3 {
+}
+#waiting-players-container h3 {
     margin: 0 0 5px;
     font-size: 16px;
-  }
-  
-  #waiting-players-list {
+}
+#waiting-players-list {
     list-style: none;
     padding: 0;
     margin: 0;
@@ -335,51 +321,60 @@ body {
     max-height: 100px;
     overflow-y: auto;
     text-align: left;
-  }
-  
-  #waiting-players-list li {
+}
+#waiting-players-list li {
     margin: 2px 0;
     color: #fff;
-  }
-  
-  /* Clickable player styles */
-  .clickable-player {
+}
+
+/* Clickable player styles */
+.clickable-player {
     cursor: pointer;
     padding: 8px 12px !important;
     border-radius: 5px;
     margin: 5px 0;
     transition: all 0.2s ease;
     background-color: rgba(0, 0, 0, 0.3) !important;
-  }
-  
-  .clickable-player:hover {
+}
+
+.clickable-player:hover {
     background-color: rgba(0, 212, 255, 0.2) !important;
     transform: translateX(5px);
     box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
-  }
-  
-  .clickable-player .player-name {
+}
+
+.clickable-player .player-name {
     font-weight: bold;
     color: #00d4ff;
-  }
-  
-  .clickable-player .player-rounds {
+}
+
+
+.clickable-player .player-rounds {
     color: rgba(255, 255, 255, 0.7);
-  }
-  
-  /* Input highlight effect when rounds are auto-filled */
-  @keyframes highlightInput {
+}
+
+/* Input highlight effect when rounds are auto-filled */
+@keyframes highlightInput {
     0%, 100% { background: rgba(255, 255, 255, 0.1); }
     50% { background: rgba(0, 212, 255, 0.3); }
-  }
-  
-  .highlight-input {
+}
+
+.highlight-input {
     animation: highlightInput 1s ease;
-  }
-  
-  /* ---------- UI NOTIFICATIONS ---------- */
-  /* Window size warning */
-  .window-size-warning {
+}
+
+/* Pulse animation for join button */
+@keyframes pulse {
+    0%, 100% { transform: scale(1); box-shadow: 0 0 10px rgba(0, 212, 255, 0.3); }
+    50% { transform: scale(1.05); box-shadow: 0 0 20px rgba(0, 212, 255, 0.6); }
+}
+
+.pulse {
+    animation: pulse 1.5s ease-in-out;
+}
+
+/* Window size warning */
+.window-size-warning {
     position: absolute;
     top: 0;
     left: 0;
@@ -393,14 +388,115 @@ body {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
     transform: translateY(-100%);
     transition: transform 0.3s ease;
-  }
-  
-  .window-size-warning.active {
+}
+
+.window-size-warning.active {
     transform: translateY(0);
-  }
-  
-  /* Game info */
-  .game-info {
+}
+
+/* Button disabled style */
+.button.disabled {
+    opacity: 0.5 !important;
+    cursor: not-allowed !important;
+    pointer-events: none !important;
+    background: linear-gradient(90deg, #555, #777) !important;
+}
+
+/* Leaderboard styling */
+.leaderboard-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    text-align: left;
+}
+.leaderboard-list li {
+    margin: 5px 0;
+    color: #fff;
+    padding: 8px 12px;
+    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    transition: background-color 0.3s ease;
+}
+.leaderboard-list li:last-child {
+    border-bottom: none;
+}
+
+/* Player Name Styling */
+.leaderboard-list .player-name {
+    cursor: pointer;
+    font-weight: bold;
+    transition: color 0.3s ease;
+}
+.leaderboard-list .player-name:hover {
+    color: #00d4ff;
+}
+
+/* Rank Styling */
+.leaderboard-list li.rank-gold {
+    background-color: rgba(255, 215, 0, 0.1);
+    border-left: 4px solid gold;
+}
+.leaderboard-list li.rank-silver {
+    background-color: rgba(192, 192, 192, 0.1);
+    border-left: 4px solid silver;
+}
+.leaderboard-list li.rank-bronze {
+    background-color: rgba(205, 127, 50, 0.1);
+    border-left: 4px solid #cd7f32;
+}
+
+/* Player Stats Modal */
+.player-stats-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(0, 0, 0, 0.7);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 1000;
+}
+
+.player-stats-modal .modal-content {
+    background: rgba(0, 0, 0, 0.9);
+    padding: 20px;
+    border-radius: 10px;
+    max-width: 400px;
+    width: 90%;
+    text-align: center;
+    border: 2px solid rgba(0, 212, 255, 0.3);
+}
+
+.player-stats-modal .rank-badge {
+    padding: 5px 10px;
+    border-radius: 5px;
+    font-weight: bold;
+}
+
+.player-stats-modal .rank-badge.rank-gold {
+    background-color: gold;
+    color: black;
+}
+.player-stats-modal .rank-badge.rank-silver {
+    background-color: silver;
+    color: black;
+}
+.player-stats-modal .rank-badge.rank-bronze {
+    background-color: #cd7f32;
+    color: white;
+}
+
+.player-stats-modal .rank-badge.rank-unranked {
+    background-color: #808080;
+    color: white;
+}
+
+/* Game info */
+.game-info {
     background: rgba(0, 0, 0, 0.8);
     color: white;
     padding: 5px 10px;
@@ -412,14 +508,29 @@ body {
     display: none;
     box-shadow: 0 0 10px rgba(0, 212, 255, 0.3);
     z-index: 1000;
-  }
-  
-  .game-info.visible {
+}
+.game-info.visible {
     display: block;
-  }
-  
-  /* Animated minimized warning */
-  .minimized-warning {
+}
+
+/* Fade-in Animation */
+@keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.95); }
+    to { opacity: 1; transform: scale(1); }
+}
+
+/* Add a subtle glow effect to important elements */
+h2, h3, .button, #pong-canvas {
+    animation: glow 4s infinite alternate;
+}
+
+@keyframes glow {
+    from { box-shadow: 0 0 5px rgba(0, 212, 255, 0.1); }
+    to { box-shadow: 0 0 15px rgba(0, 212, 255, 0.4); }
+}
+
+/* Animated minimized warning */
+.minimized-warning {
     position: fixed;
     top: 50%;
     left: 50%;
@@ -435,14 +546,13 @@ body {
     cursor: pointer;
     z-index: 100;
     max-width: 80%;
-  }
-  
-  .minimized-warning.hidden {
+}
+.minimized-warning.hidden {
     display: none;
-  }
-  
-  /* Game controls overlay */
-  .game-controls-overlay {
+}
+
+/* Game controls overlay */
+.game-controls-overlay {
     position: absolute;
     top: 0;
     left: 0;
@@ -458,32 +568,42 @@ body {
     text-align: center;
     font-size: 24px;
     pointer-events: none;
-  }
-  
-  .game-controls-overlay.hidden {
+}
+
+.game-controls-overlay.hidden {
     display: none;
-  }
-  
-  .game-controls-overlay h3 {
+}
+
+.game-controls-overlay h3 {
     margin-bottom: 20px;
     color: #00d4ff;
-  }
-  
-  .game-controls-overlay p {
+}
+
+.game-controls-overlay p {
     max-width: 80%;
     margin: 0 auto;
     font-size: 18px;
     color: rgba(255, 255, 255, 0.8);
-  }
-  
-  /* ---------- FAIR PLAY WARNING ---------- */
-  .fair-play-warning {
+}
+
+/* Pause overlay pulse animation, dead */
+@keyframes pausePulse {
+    0%, 100% { opacity: 0.8; }
+    50% { opacity: 1; }
+}
+
+.pause-pulse {
+    animation: pausePulse 2s infinite ease-in-out;
+}
+
+/* Fair Play Warning Overlay */
+.fair-play-warning {
     position: fixed;
     top: 0;
     left: 0;
     width: 100%;
     height: 100%;
-    background-color: rgba(0, 0, 0, 0.9);
+    background-color: rgba(255, 0, 0, 0.85);
     z-index: 10000;
     display: flex;
     flex-direction: column;
@@ -492,81 +612,42 @@ body {
     color: white;
     text-align: center;
     font-size: 24px;
-    padding: 20px;
-    animation: fadeIn 0.5s ease-in-out;
-  }
-  
-  .fair-play-warning .warning-content {
-    background-color: rgba(220, 53, 69, 0.2);
-    border: 2px solid rgba(220, 53, 69, 0.5);
-    border-radius: 15px;
-    padding: 30px;
-    max-width: 600px;
-    box-shadow: 0 0 30px rgba(220, 53, 69, 0.3);
-  }
-  
-  .fair-play-warning h3 {
-    color: #f8d7da;
-    margin-bottom: 20px;
-  }
-  
-  .fair-play-warning p {
-    font-size: 18px;
-    margin-bottom: 25px;
-  }
-  
-  /* ---------- LEADERBOARD STYLING ---------- */
-  .leaderboard-list {
-    list-style: none;
-    padding: 0;
-    margin: 0;
-    text-align: left;
-  }
-  
-  .leaderboard-list li {
-    margin: 5px 0;
-    color: #fff;
-    padding: 8px 12px;
-    border-bottom: 1px solid rgba(0, 212, 255, 0.2);
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    transition: background-color 0.3s ease;
-  }
-  
-  .leaderboard-list li:last-child {
-    border-bottom: none;
-  }
-  
-  /* Player Name Styling */
-  .leaderboard-list .player-name {
-    cursor: pointer;
     font-weight: bold;
-    transition: color 0.3s ease;
-  }
-  
-  .leaderboard-list .player-name:hover {
-    color: #00d4ff;
-  }
-  
-  /* Rank Styling */
-  .leaderboard-list li.rank-gold {
-    background-color: rgba(255, 215, 0, 0.1);
-    border-left: 4px solid gold;
-  }
-  
-  .leaderboard-list li.rank-silver {
-    background-color: rgba(192, 192, 192, 0.1);
-    border-left: 4px solid silver;
-  }
-  
-  .leaderboard-list li.rank-bronze {
-    background-color: rgba(205, 127, 50, 0.1);
-    border-left: 4px solid #cd7f32;
-  }
-  
-  /* ---------- CUSTOM GAME PAGE STYLES ---------- */
-  .code-input-section {
+    padding: 20px;
+    animation: pulse-warning 2s infinite alternate;
+    cursor: pointer;
+}
+
+@keyframes pulse-warning {
+    from { background-color: rgba(255, 0, 0, 0.85); }
+    to { background-color: rgba(200, 0, 0, 0.95); }
+}
+
+.fair-play-warning h2 {
+    font-size: 32px;
+    margin-bottom: 20px;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.fair-play-warning p {
+    font-size: 18px;
+    max-width: 600px;
+    margin: 10px auto;
+}
+
+.fair-play-warning button {
+    margin-top: 20px;
+    padding: 10px 20px;
+    background-color: white;
+    color: red;
+    border: none;
+    border-radius: 5px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+/* Custom Game Page Styles */
+.code-input-section {
     background: rgba(0, 0, 0, 0.3);
     padding: 15px;
     border-radius: 10px;
@@ -621,6 +702,12 @@ body {
     background: rgba(0, 212, 255, 0.3);
   }
   
+  /* Color picker custom styling */
+  .form-control-color {
+    width: 100%;
+    height: 40px;
+  }
+  
   /* Animation for applying code */
   @keyframes codeApplied {
     0%, 100% { transform: scale(1); }
@@ -631,8 +718,14 @@ body {
     animation: codeApplied 0.5s ease-in-out;
   }
   
-  /* ---------- TOURNAMENT STYLES ---------- */
-  #tournament-section {
+  /* Gap utility class for better button spacing */
+  .gap-2 {
+    gap: 0.5rem;
+  }
+
+
+/* Tournament styles */
+#tournament-section {
     margin-top: 20px;
   }
   
@@ -701,113 +794,4 @@ body {
   
   .tournament-status.started {
     background-color: rgba(255, 193, 7, 0.2);
-  }
-  
-  /* ---------- PLAYER STATS DASHBOARD ---------- */
-  .player-stats-modal {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    background: rgba(0, 0, 0, 0.7);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 1000;
-  }
-  
-  .player-stats-modal .modal-content {
-    background: rgba(0, 0, 0, 0.9);
-    padding: 20px;
-    border-radius: 10px;
-    max-width: 400px;
-    width: 90%;
-    text-align: center;
-    border: 2px solid rgba(0, 212, 255, 0.3);
-  }
-  
-  .player-stats-modal .rank-badge {
-    padding: 5px 10px;
-    border-radius: 5px;
-    font-weight: bold;
-  }
-  
-  .player-stats-modal .rank-badge.rank-gold {
-    background-color: gold;
-    color: black;
-  }
-  
-  .player-stats-modal .rank-badge.rank-silver {
-    background-color: silver;
-    color: black;
-  }
-  
-  .player-stats-modal .rank-badge.rank-bronze {
-    background-color: #cd7f32;
-    color: white;
-  }
-  
-  .player-stats-modal .rank-badge.rank-unranked {
-    background-color: #808080;
-    color: white;
-  }
-  
-  /* ---------- MOBILE JOYSTICK ---------- */
-  /* Mobile Joystick Specific Styles */
-  #mobile-joystick {
-    display: none; /* Hidden by default */
-  }
-  
-  @media (max-width: 768px) {
-    #mobile-joystick {
-      display: block; /* Show on mobile devices */
-    }
-  }
-  
-  /* ---------- RESPONSIVE DESIGN ---------- */
-  /* Small devices (phones) */
-  @media (max-width: 576px) {
-    #app {
-      width: 95% !important;
-      max-width: none !important;
-      padding: 15px !important;
-    }
-    
-    .button {
-      padding: 10px !important;
-      font-size: 16px !important;
-    }
-    
-    #pong-canvas {
-      height: 250px;
-    }
-    
-    h2 {
-      font-size: 20px !important;
-    }
-    
-    .nickname-input, .rounds-input, .form-control, .form-select {
-      width: 90% !important;
-      padding: 10px !important;
-    }
-    
-    .player-stats-modal .modal-content {
-      width: 95%;
-      padding: 15px;
-    }
-  }
-  
-  /* Medium devices (tablets) */
-  @media (min-width: 577px) and (max-width: 768px) {
-    #app {
-      width: 90% !important;
-    }
-  }
-  
-  /* Large devices (desktops) */
-  @media (min-width: 769px) and (max-width: 992px) {
-    #app {
-      width: 70% !important;
-    }
   }
