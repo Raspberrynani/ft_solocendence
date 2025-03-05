@@ -1258,91 +1258,98 @@ const App = (function() {
         state.game.active = false;
         
         // Stop the game
-        if (window.PongGame) {
+        if (state.game.isMultiplayer) {
+          // Stop server-side game renderer
+          if (window.ServerPong) {
+            ServerPong.stop();
+          }
+        } else {
+          // Stop client-side game
+          if (window.PongGame) {
             PongGame.stop();
+          }
         }
-    
+      
         // For multiplayer mode, report score to server
         if (state.game.isMultiplayer) {
-            try {
-                const result = await recordGameResult(
-                    state.user.nickname,
-                    state.user.token,
-                    state.game.rounds.current,
-                    state.game.rounds.target
-                );
-                
-                // Check if this was a tournament game
-                if (state.game.isTournament && modules.tournament && modules.tournament.isInTournament()) {
-                    // Send game over to WebSocket to notify tournament system
-                    if (modules.websocket) {
-                        modules.websocket.sendGameOver(state.game.rounds.current);
-                    }
-                    
-                    // Navigate back to game page where tournament UI is
-                    if (modules.ui) {
-                        modules.ui.navigateTo('game-page');
-                    }
-                } else {
-                    // Show game result toast for non-tournament games
-                    if (result.winner) {
-                        const winMessage = modules.localization ? 
-                            modules.localization.get('gameWon') : 
-                            'Congratulations! You won the game!';
-                            
-                        showToast(winMessage, 'success');
-                    } else {
-                        const lossMessage = modules.localization ? 
-                            modules.localization.get('gameLost') : 
-                            'Game over. Better luck next time!';
-                            
-                        showToast(lossMessage, 'warning');
-                    }
-                    
-                    // Update UI
-                    if (elements.endGame) {
-                        elements.endGame.classList.add('hidden');
-                    }
-                    
-                    // Navigate to leaderboard for non-tournament games
-                    if (modules.ui) {
-                        modules.ui.navigateTo('leaderboard-page');
-                    }
-                }
-            } catch (error) {
-                console.error('Error ending game:', error);
-                
-                const errorMessage = modules.localization ? 
-                    modules.localization.get('failedToRecord') : 
-                    'Failed to record game result!';
-                    
-                showNetworkError(errorMessage);
-                
-                // Navigate back to menu even on error
-                if (modules.ui) {
-                    modules.ui.navigateTo('game-page');
-                }
-            }
-        } else {
-            // For non-multiplayer games (AI or custom), do not record
-            console.log('Not recording game result for non-multiplayer mode');
-            showToast('Custom/AI game completed', 'info');
+          try {
+            // For server-side games, the server already has the score
+            // We just need to know if this was a tournament game
             
-            // Update UI
-            if (elements.endGame) {
-                elements.endGame.classList.add('hidden');
-            }
-            
-            // Navigate to menu
-            if (modules.ui) {
+            // Check if this was a tournament game
+            if (state.game.isTournament && modules.tournament && modules.tournament.isInTournament()) {
+              // Send game over to WebSocket to notify tournament system
+              if (modules.websocket) {
+                modules.websocket.sendGameOver(state.game.rounds.current);
+              }
+              
+              // Navigate back to game page where tournament UI is
+              if (modules.ui) {
                 modules.ui.navigateTo('game-page');
+              }
+            } else {
+              // Get the final result from ServerPong
+              let result = { winner: false };
+              
+              // Show game result toast for non-tournament games
+              if (result.winner) {
+                const winMessage = modules.localization ? 
+                  modules.localization.get('gameWon') : 
+                  'Congratulations! You won the game!';
+                  
+                showToast(winMessage, 'success');
+              } else {
+                const lossMessage = modules.localization ? 
+                  modules.localization.get('gameLost') : 
+                  'Game over. Better luck next time!';
+                  
+                showToast(lossMessage, 'warning');
+              }
+              
+              // Update UI
+              if (elements.endGame) {
+                elements.endGame.classList.add('hidden');
+              }
+              
+              // Navigate to leaderboard for non-tournament games
+              if (modules.ui) {
+                modules.ui.navigateTo('leaderboard-page');
+              }
             }
+          } catch (error) {
+            console.error('Error ending game:', error);
+            
+            const errorMessage = modules.localization ? 
+              modules.localization.get('failedToRecord') : 
+              'Failed to record game result!';
+              
+            showNetworkError(errorMessage);
+            
+            // Navigate back to menu even on error
+            if (modules.ui) {
+              modules.ui.navigateTo('game-page');
+            }
+          }
+        } else {
+          // For non-multiplayer games (AI or custom), do not record
+          console.log('Not recording game result for non-multiplayer mode');
+          showToast('Custom/AI game completed', 'info');
+          
+          // Update UI
+          if (elements.endGame) {
+            elements.endGame.classList.add('hidden');
+          }
+          
+          // Navigate to menu
+          if (modules.ui) {
+            modules.ui.navigateTo('game-page');
+          }
         }
         
         // Exit fullscreen if active
         exitFullscreen().catch(err => {
-            // Ignore fullscreen exit errors
-            console.warn('Error exiting fullscreen:', err);
+          // Ignore fullscreen exit errors
+          console.warn('Error exiting fullscreen:', err);
         });
     }
     

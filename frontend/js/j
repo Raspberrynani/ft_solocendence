@@ -1,136 +1,507 @@
-/**
- * ULTRA-AGGRESSIVE Ball Synchronization System
- * Ensures perfect sync between players with multiple redundant techniques
- */
-(function() {
-    // CONSTANTS and state variables remain the same
-    
-    // Debug logging
-    function debug(...args) {
-        if (DEBUG) {
-            console.log("[BALL-SYNC]", ...args);
+The user is asking me to rewrite the multiplayer Pong game to be fully server-sided because they've struggled to make it work client-side. Let me analyze what's going on here:
+
+Looking at the code, I can see that the current implementation is a client-side game with WebSocket synchronization attempts between players. There are a few different synchronization approaches in the codebase (ball-sync.js, alt-sync-ball.js, etc.).
+The main issue they're facing is likely related to synchronization challenges in multiplayer games, which are notoriously difficult to get right with client-side physics.
+They want to switch to a server-side approach, which means the game logic would run on the server, and clients would just receive updates and send inputs.
+
+Let's look at the relevant components to understand the current structure:
+
+backend/pong/consumers.py - This is the WebSocket consumer that handles connections and messaging
+frontend/js/pong-game.js - The client-side game implementation
+frontend/js/websocket.js - The client-side WebSocket manager
+
+To rewrite this as a server-side game, I'll need to:
+
+Create a server-side game engine in Python (Django/Channels)
+Simplify the client to just render the game state and send inputs
+Update the WebSocket communication for this new approach
+
+Let me start by designing a server-side Pong implementation in the consumer, then create a simplified client renderer.
+Let's first understand the current consumer logic:
+
+It handles player joining/waiting, game creation, and tournaments
+It manages game rooms where players are connected
+It forwards game updates between clients
+
+To make this server-sided, I'll need to:
+
+Modify the consumer to run the game physics
+Create game state objects server-side for active games
+Send regular state updates to clients
+Accept only control inputs from clients
+
+Let's design this solution:
+python
+# Server-side game state class
+class PongGame:
+    def __init__(self, width=800, height=400):
+        self.width = width
+        self.height = height
+        self.ball = {
+            'x': width / 2,
+            'y': height / 2,
+            'radius': 10,
+            'speed': 5,
+            'vx': 5,
+            'vy': 5
         }
-    }
+        self.paddles = {
+            'left': {
+                'x': 20,
+                'y': height / 2 - 50,
+                'width': 10,
+                'height': 100
+            },
+            'right': {
+                'x': width - 30,
+                'y': height / 2 - 50,
+                'width': 10,
+                'height': 100
+            }
+        }
+        self.score = {'left': 0, 'right': 0}
+        self.max_score = 3
+        self.last_update = time.time()
+        
+    def update(self):
+        # Calculate time delta
+        now = time.time()
+        delta = now - self.last_update
+        self.last_update = now
+        
+        # Update ball position
+        self.ball['x'] += self.ball['vx'] * delta * 60  # Scale for 60fps
+        self.ball['y'] += self.ball['vy'] * delta * 60
+        
+        # Ball collisions with walls
+        if self.ball['y'] - self.ball['radius'] < 0 or self.ball['y'] + self.ball['radius'] > self.height:
+            self.ball['vy'] = -self.ball['vy']
+            
+        # Ball collisions with paddles
+        # Left paddle
+        if (self.ball['x'] - self.ball['radius'] < self.paddles['left']['x'] + self.paddles['left']['width'] and
+            self.ball['x'] - self.ball['radius'] > self.paddles['left']['x'] and
+            self.ball['y'] > self.paddles['left']['y'] and
+            self.ball['y'] < self.paddles['left']['y'] + self.paddles['left']['height']):
+            self.ball['vx'] = abs(self.ball['vx']) * 1.1  # Speed up slightly
+            
+        # Right paddle
+        if (self.ball['x'] + self.ball['radius'] > self.paddles['right']['x'] and
+            self.ball['x'] + self.ball['radius'] < self.paddles['right']['x'] + self.paddles['right']['width'] and
+            self.ball['y'] > self.paddles['right']['y'] and
+            self.ball['y'] < self.paddles['right']['y'] + self.paddles['right']['height']):
+            self.ball['vx'] = -abs(self.ball['vx']) * 1.1  # Speed up slightly
+            
+        # Ball out of bounds (scoring)
+        if self.ball['x'] - self.ball['radius'] < 0:
+            self.score['right'] += 1
+            self.reset_ball(1)  # Ball goes to right player
+        elif self.ball['x'] + self.ball['radius'] > self.width:
+            self.score['left'] += 1
+            self.reset_ball(-1)  # Ball goes to left player
+            
+        # Check for game over
+        if self.score['left'] >= self.max_score or self.score['right'] >= self.max_score:
+            return True  # Game over
+        return False
+            
+    def reset_ball(self, direction=1):
+        self.ball['x'] = self.width / 2
+        self.ball['y'] = self.height / 2
+        angle = random.uniform(-math.pi/4, math.pi/4)
+        speed = 5
+        self.ball['vx'] = math.cos(angle) * speed * direction
+        self.ball['vy'] = math.sin(angle) * speed
+        
+    def move_paddle(self, side, y):
+        # Move paddle with bounds checking
+        self.paddles[side]['y'] = max(0, min(y, self.height - self.paddles[side]['height']))
+        
+    def get_state(self):
+        # Return the current game state as a dict
+        return {
+            'ball': self.ball,
+            'paddles': self.paddles,
+            'score': self.score
+        }
+consumer
+class PongConsumer(AsyncWebsocketConsumer):
+    # Create game registry
+    active_games = {}  # Maps game room to game instance
     
-    // Create debug UI - FIXED
-    function createDebugUI() {
-        if (!DEBUG) return;
+    # Game loop task registry
+    game_tasks = {}  # Maps game room to asyncio task
+    
+    # ... existing code ...
+    
+    async def handle_game_start(self, data):
+        # Create new game instance
+        game_room = "game_" + str(uuid.uuid4())
+        width = 800  # Default width
+        height = 400  # Default height
+        rounds = data.get("rounds", 3)
         
-        const debugPanel = document.createElement('div');
-        debugPanel.id = 'ball-sync-debug';
-        debugPanel.style.cssText = `
-            position: fixed;
-            top: 10px;
-            right: 10px;
-            background: rgba(0,0,0,0.7);
-            color: #fff;
-            font-family: monospace;
-            font-size: 10px;
-            padding: 5px;
-            border-radius: 5px;
-            z-index: 10000;
-            pointer-events: none;
-            max-width: 200px;
-            overflow: hidden;
-        `;
-        document.body.appendChild(debugPanel);
+        game = PongGame(width, height)
+        game.max_score = rounds
         
-        // Update debug info
-        setInterval(() => {
-            if (!document.getElementById('ball-sync-debug')) return;
+        # Store the game
+        self.active_games[game_room] = game
+        
+        # Add players to game room
+        # ... code to add players ...
+        
+        # Start game loop
+        self.game_tasks[game_room] = asyncio.create_task(self.game_loop(game_room))
+        
+    async def game_loop(self, game_room):
+        game = self.active_games.get(game_room)
+        if not game:
+            return
             
-            let ballX = "N/A";
-            let ballY = "N/A";
-            
-            // FIXED: More robust ball state access
-            try {
-                if (window.PongGame && typeof PongGame.getState === 'function') {
-                    const state = PongGame.getState();
-                    if (state && state.ball && typeof state.ball.x === 'number') {
-                        ballX = state.ball.x.toFixed(2);
-                        ballY = state.ball.y.toFixed(2);
+        # Run at 60fps (16.7ms)
+        update_interval = 1/60
+        
+        try:
+            while True:
+                # Update game state
+                game_over = game.update()
+                
+                # Send state to all clients in room
+                await self.channel_layer.group_send(
+                    game_room,
+                    {
+                        "type": "send_game_state",
+                        "state": game.get_state()
                     }
-                }
-            } catch (e) {
-                // Silently handle errors during debug info gathering
-                debug("Error getting ball info:", e);
-            }
+                )
+                
+                # Check for game over
+                if game_over:
+                    await self.channel_layer.group_send(
+                        game_room,
+                        {
+                            "type": "game_over",
+                            "score": game.score
+                        }
+                    )
+                    # Clean up
+                    del self.active_games[game_room]
+                    break
+                    
+                # Wait for next frame
+                await asyncio.sleep(update_interval)
+        except Exception as e:
+            logging.error(f"Error in game loop: {e}")
+        finally:
+            # Ensure cleanup
+            if game_room in self.active_games:
+                del self.active_games[game_room]
             
-            debugPanel.innerHTML = `
-                <div>Sync: ${gameState.syncEnabled ? 'ON' : 'OFF'}</div>
-                <div>Side: ${gameState.isLeftSide === null ? 'UNKNOWN' : gameState.isLeftSide ? 'LEFT' : 'RIGHT'}</div>
-                <div>Authority: ${gameState.ballAuthority ? 'YES' : 'NO'}</div>
-                <div>Latency: ${gameState.latency}ms</div>
-                <div>Ball: ${ballX}, ${ballY}</div>
-                <div>History: ${ballHistory.length} entries</div>
-            `;
-        }, 200);
-    }
-    
-    // FIXED: Get ball state with proper error handling
-    function getBallState() {
-        try {
-            if (window.PongGame && typeof PongGame.getState === 'function') {
-                const state = PongGame.getState();
-                if (state && state.ball && 
-                    typeof state.ball.x === 'number' && 
-                    typeof state.ball.y === 'number' &&
-                    typeof state.ball.vx === 'number' && 
-                    typeof state.ball.vy === 'number') {
-                    return state.ball;
-                }
-            }
-        } catch (e) {
-            debug("Error getting ball state:", e);
-        }
-        return null;
-    }
-    
-    // FIXED: Get direct reference to ball object
-    function getBallDirectly() {
-        try {
-            // Method 1: Through PongGame.getState
-            if (window.PongGame && typeof PongGame.getState === 'function') {
-                const state = PongGame.getState();
-                if (state && state.ball) {
-                    return state.ball;
-                }
-            }
+    async def send_game_state(self, event):
+        # Send game state to client
+        await self.send(text_data=json.dumps({
+            "type": "game_state",
+            "state": event["state"]
+        }))
+        
+    async def receive(self, text_data):
+        data = json.loads(text_data)
+        
+        # Handle paddle movement
+        if data.get("type") == "game_update" and "paddleY" in data.get("data", {}):
+            game_room = self.active_games.get(self.channel_name)
+            game = self.active_games.get(game_room)
             
-            // Method 2: Direct global variable
-            if (window.ball) {
-                return window.ball;
-            }
-        } catch (e) {
-            debug("Error accessing ball directly:", e);
+            if game:
+                # Determine which paddle to move based on which side the player is on
+                side = "left" if self.is_left_player(game_room) else "right"
+                game.move_paddle(side, data["data"]["paddleY"])
+Cliner
+// Simplified PongGame for server-side rendering
+const PongGame = (function() {
+    // Private variables
+    let canvas, ctx;
+    let gameState = null;
+    let gameLoopId;
+    let isRunning = false;
+    let isLeftSide = true;  // Default to left side, will be updated
+    
+    function init(config = {}) {
+        canvas = document.getElementById(config.canvasId || 'pong-canvas');
+        if (!canvas) {
+            console.error("Canvas element not found!");
+            return false;
         }
         
-        return null;
-    }
-    
-    // FIXED: Delay initialization until PongGame is available
-    function init() {
-        debug("Ultra-aggressive ball sync initializing");
+        ctx = canvas.getContext('2d');
         
-        // Add a delay to initial setup to allow the game to initialize
-        setTimeout(() => {
-            setupNetworkHooks();
-            setupGameHooks();
-            createDebugUI();
-            startSyncLoop();
+        // Set up input handlers
+        setupInputHandlers();
+        
+        // Store callbacks
+        eventCallbacks = config.callbacks || {};
+        
+        return true;
+    }
+    
+    function setupInputHandlers() {
+        const mouseMoveHandler = Utils.throttle((e) => {
+            if (!isRunning) return;
             
-            // Start latency measurement
-            measureLatency();
-            setInterval(measureLatency, PING_FREQUENCY_MS);
-        }, 1000); // 1-second delay before initializing
+            const rect = canvas.getBoundingClientRect();
+            const mouseY = e.clientY - rect.top;
+            
+            // Send paddle position to server
+            if (WebSocketManager) {
+                WebSocketManager.sendPaddleUpdate(mouseY);
+            }
+        }, 16); // ~60fps throttling
+        
+        canvas.addEventListener("mousemove", mouseMoveHandler);
+        canvas.addEventListener("touchmove", (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent("mousemove", {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            mouseMoveHandler(mouseEvent);
+        }, { passive: false });
     }
     
-    // The rest of the functions remain the same...
-    
-    // Initialize when DOM loaded
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', init);
-    } else {
-        init();
+    function start() {
+        if (isRunning) return;
+        
+        isRunning = true;
+        gameLoopId = requestAnimationFrame(draw);
+        
+        if (eventCallbacks.onGameStart) {
+            eventCallbacks.onGameStart();
+        }
     }
+    
+    function stop() {
+        isRunning = false;
+        
+        if (gameLoopId) {
+            cancelAnimationFrame(gameLoopId);
+            gameLoopId = null;
+        }
+        
+        if (eventCallbacks.onGameEnd) {
+            eventCallbacks.onGameEnd();
+        }
+    }
+    
+    function draw() {
+        if (!isRunning) return;
+        
+        // Clear canvas
+        ctx.fillStyle = '#000';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        
+        // Draw game elements if we have state
+        if (gameState) {
+            // Draw center line
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.setLineDash([5, 10]);
+            ctx.beginPath();
+            ctx.moveTo(canvas.width / 2, 0);
+            ctx.lineTo(canvas.width / 2, canvas.height);
+            ctx.stroke();
+            ctx.setLineDash([]);
+            
+            // Draw ball
+            const ball = gameState.ball;
+            ctx.fillStyle = '#fff';
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fill();
+            
+            // Draw paddles
+            ctx.fillStyle = '#fff';
+            const leftPaddle = gameState.paddles.left;
+            const rightPaddle = gameState.paddles.right;
+            
+            ctx.fillRect(leftPaddle.x, leftPaddle.y, leftPaddle.width, leftPaddle.height);
+            ctx.fillRect(rightPaddle.x, rightPaddle.y, rightPaddle.width, rightPaddle.height);
+            
+            // Draw score
+            ctx.fillStyle = '#fff';
+            ctx.font = '30px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(gameState.score.left, canvas.width / 4, 50);
+            ctx.fillText(gameState.score.right, 3 * canvas.width / 4, 50);
+        }
+        
+        // Continue loop
+        gameLoopId = requestAnimationFrame(draw);
+    }
+    
+    // Update game state from server
+    function updateState(newState) {
+        gameState = newState;
+    }
+    
+    // Public API
+    return {
+        init,
+        start,
+        stop,
+        updateState,
+        setLeftSide: (value) => { isLeftSide = value; }
+    };
 })();
+Websokcet manager
+const WebSocketManager = (function() {
+    // ... existing code ...
+    
+    // Process a parsed WebSocket message based on its type
+    function processMessage(data) {
+        // Add specific handler for game state updates
+        if (data.type === 'game_state' && data.state) {
+            // Update the PongGame state
+            if (window.PongGame && typeof PongGame.updateState === 'function') {
+                PongGame.updateState(data.state);
+            }
+            return;
+        }
+        
+        // ... existing handlers ...
+    }
+    
+    // ... rest of existing code ...
+});
+
+
+# Server-Side Pong Integration Guide
+
+This guide will walk you through integrating the server-side Pong implementation into your existing Django Channels project.
+
+## Overview
+
+The solution moves all game physics and logic to the server, eliminating synchronization issues between clients. In this approach:
+
+1. **Server** handles:
+   - Game physics and collision detection
+   - Ball movement and paddle positioning
+   - Scoring and game state management
+   - Broadcasting updates to all players
+
+2. **Client** handles:
+   - Rendering the game state received from server
+   - Sending paddle movements to server
+   - User interface and feedback
+
+## Installation Steps
+
+### 1. Replace the Consumer File
+
+Replace the content of `backend/pong/consumers.py` with the code from the "Server-Side Pong Implementation" artifact.
+
+### 2. Update Frontend Files
+
+Replace `frontend/js/pong-game.js` with the "Updated Client-Side Pong Renderer" artifact.
+
+### 3. Update WebSocket Manager
+
+Add the integration code from the end of the "Updated Client-Side Pong Renderer" artifact to your `frontend/js/websocket.js` file.
+
+### 4. Remove Redundant Sync Files
+
+Since we're now using server-side synchronization, you can remove these files:
+- `frontend/js/ball-sync.js`
+- `frontend/js/alt-sync-ball.js`
+- `frontend/js/enhanced-ball.js`
+
+## Configuration
+
+### Server Settings
+
+You can adjust these constants in `consumers.py` to fine-tune the game:
+
+```python
+# Game physics constants
+PADDLE_WIDTH = 10
+PADDLE_HEIGHT = 100
+BALL_RADIUS = 10
+BALL_SPEED = 5
+PADDLE_SPEED = 8
+FPS = 60  # Game update rate
+```
+
+### Frontend Integration
+
+The client-side renderer automatically scales the game to fit the canvas size, so no additional configuration is needed.
+
+## How It Works
+
+### Game Flow
+
+1. Players join the waiting queue
+2. Server matches players together
+3. Server creates a game instance and starts the game loop
+4. Game loop continuously:
+   - Updates game physics
+   - Checks for collisions
+   - Handles scoring
+   - Sends state updates to players
+5. Players send paddle movements as they play
+6. When a player scores, server handles game progress
+7. Game ends when score threshold is reached
+
+### WebSocket Messages
+
+The server sends these messages to clients:
+- `game_state`: Current positions of ball and paddles
+- `round_complete`: When a point is scored
+- `game_over`: When the game ends
+- `start_game`: When a new game begins
+- `opponent_left`: When the opponent disconnects
+
+The client sends:
+- `join`: To join the waiting queue
+- `game_update`: To send paddle positions
+
+## Troubleshooting
+
+If you encounter issues:
+
+1. **Check the console logs** - Both client and server logs will help diagnose issues
+2. **Ensure WebSocket connection** - Make sure the WebSocket connection is established
+3. **Verify routes** - Confirm that the WebSocket URL is correctly configured
+4. **Canvas rendering** - Make sure the canvas element exists and is accessible
+
+## Advanced Customization
+
+### Adding Power-ups
+
+To add power-ups, you would need to:
+1. Extend the `PongGame` class with power-up properties
+2. Add logic for spawning power-ups
+3. Add collision detection for power-ups
+4. Implement power-up effects in the update method
+5. Include power-up data in the game state sent to clients
+6. Update the client-side renderer to display power-ups
+
+### Tournament Integration
+
+The server-side Pong implementation should work seamlessly with your existing tournament logic since it uses the same WebSocket communication patterns.
+
+### Multiple Players
+
+To support more than two players:
+1. Modify the `PongGame` class to support additional paddles
+2. Update collision detection for multiple paddles
+3. Extend the player matching logic
+4. Update the client renderer to display multiple paddles
+
+## Performance Considerations
+
+- The server sends game state updates at 60fps, which may be bandwidth intensive
+- For large-scale deployments, consider reducing the update rate
+- The client-side renderer is highly optimized and should run efficiently
+
+## Conclusion
+
+This server-side implementation fixes the synchronization issues by having a single source of truth for the game state. The server dictates all physics and game logic, while clients simply render what they're told and send input.
