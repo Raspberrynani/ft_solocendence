@@ -1010,7 +1010,22 @@ const PongGame = (function() {
       setDifficulty,
       getState,
       setControlEnabled,
-      toggleFps
+      toggleFps,
+      updateBallPosition: function(position) {
+        // Only if ball exists
+        if (!ball) return false;
+        
+        // Update ball properties
+        ball.x = position.x;
+        ball.y = position.y;
+        
+        // If velocity is provided, update it
+        if (position.vx !== undefined) ball.vx = position.vx;
+        if (position.vy !== undefined) ball.vy = position.vy;
+        if (position.speed !== undefined) ball.speed = position.speed;
+        
+        return true;
+      }
     };
   })();
   

@@ -190,6 +190,18 @@ const WebSocketManager = (function() {
       if (data.type.includes('tournament') || data.type === 'start_game') {
         console.log("WebSocket [TOURNAMENT DEBUG]:", data);
       }
+
+      if (data.type === 'game_update' && data.data) {
+        // Already have some game_update handling
+        // Add specific checks for ball sync
+        if (data.data.ballPosition || data.data.syncRequest || 
+            data.data.authorityUpdate !== undefined || data.data.playerStatus) {
+          // Let our ball-sync.js handle this
+          if (window.handleGameUpdate) {
+            window.handleGameUpdate(data.data);
+          }
+        }
+      }
       
       // Map of message types to handler functions
       const messageHandlers = {
