@@ -1948,6 +1948,7 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Initialize app
     App.init().catch(error => {
+        DevToolsDetector.startMonitoring();
         console.error('Failed to initialize application:', error);
         // Try to show error using vanilla JS if App initialization failed
         const errorDiv = document.createElement('div');

@@ -255,9 +255,9 @@ const ErrorHandler = (function() {
     };
   })();
   
-  /**
-   * DevToolsDetector Service
-   * Provides a user-friendly way to detect and warn about DevTools usage
+    /**
+   * Enhanced DevToolsDetector Service
+   * Combines multiple techniques to detect if DevTools is open.
    */
   const DevToolsDetector = (function() {
     // Private variables
@@ -265,57 +265,60 @@ const ErrorHandler = (function() {
     let lastCheck = Date.now();
     let warningDisplayed = false;
     let checkInterval = null;
-    
+
     /**
-     * Check if DevTools is potentially open
-     * @returns {boolean} - Whether DevTools appears to be open
+     * Combines multiple detection methods:
+     * 1. Window size difference check.
+     * 2. Debugger timing check.
+     * 3. toString override check.
+     * @returns {boolean} - Whether DevTools appear to be open.
      */
     function checkDevTools() {
-      // Method 1: Window size difference check
-      const threshold = 160; // Pixels
-      const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-      const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-      
-      // Method 2: Debugger timing check (less frequent to avoid performance impact)
-      let debuggerCheck = false;
+      // Method 1: Window dimensions difference
+      const threshold = 100; // pixels difference threshold
+      const widthDiff = window.outerWidth - window.innerWidth;
+      const heightDiff = window.outerHeight - window.innerHeight;
+      const sizeDetected = (widthDiff > threshold || heightDiff > threshold);
+
+      // Method 2: Debugger timing check
+      let debuggerDetected = false;
       const now = Date.now();
-      
-      // Only run the expensive debugger check occasionally
-      if (now - lastCheck > 2000) { // Every 2 seconds
+      if (now - lastCheck > 1000) { // check at most once every second
         lastCheck = now;
-        
         const start = performance.now();
-        debugger; // This will pause execution in DevTools
+        debugger; // This statement may slow down execution if DevTools are open
         const end = performance.now();
-        
-        // If execution took too long, DevTools is likely open
-        debuggerCheck = (end - start) > 100;
+        debuggerDetected = (end - start > 50); // if delay exceeds 50ms, flag it
       }
-      
-      // Combine methods - if any detect DevTools, consider it open
-      const result = widthThreshold || heightThreshold || debuggerCheck;
-      
-      // Only change state if different from current
-      if (result !== isDevToolsOpen) {
-        isDevToolsOpen = result;
-      }
-      
-      return isDevToolsOpen;
+
+      // Method 3: toString override trick
+      let toStringDetected = false;
+      const dummy = {
+        toString: function() {
+          toStringDetected = true;
+          return '';
+        }
+      };
+      // Force stringification by logging dummy object.
+      console.log(dummy);
+
+      // Combine results from all methods.
+      const detected = sizeDetected || debuggerDetected || toStringDetected;
+      isDevToolsOpen = detected;
+      return detected;
     }
-    
+
     /**
-     * Create and show the warning UI
+     * Creates and shows a full-screen warning overlay if DevTools are detected.
      */
     function showWarning() {
-      // Don't show multiple warnings
       if (warningDisplayed) return;
       warningDisplayed = true;
-      
-      // Check if warning element already exists
+
+      // If a warning overlay is already in the DOM, don't add another.
       const existingWarning = document.querySelector('.fair-play-warning');
       if (existingWarning) return;
-      
-      // Create warning element with Bootstrap styling
+
       const warning = document.createElement('div');
       warning.className = 'fair-play-warning';
       warning.style.cssText = `
@@ -335,7 +338,6 @@ const ErrorHandler = (function() {
         text-align: center;
         animation: fadeIn 0.5s ease-in-out;
       `;
-      
       warning.innerHTML = `
         <div class="warning-content">
           <h3 class="mb-3">Fair Play Notice</h3>
@@ -343,17 +345,13 @@ const ErrorHandler = (function() {
           <button class="btn btn-light px-4 py-2">Continue Playing</button>
         </div>
       `;
-      
-      // Add click handler for dismiss button
       warning.querySelector('button').addEventListener('click', () => {
         warning.remove();
         warningDisplayed = false;
       });
-      
-      // Add to body
       document.body.appendChild(warning);
-      
-      // Auto-dismiss after 8 seconds
+
+      // Auto-dismiss the warning after 8 seconds
       setTimeout(() => {
         if (document.body.contains(warning)) {
           warning.remove();
@@ -361,38 +359,61 @@ const ErrorHandler = (function() {
         }
       }, 8000);
     }
-    
+
     /**
-     * Start monitoring for DevTools
-     * @param {number} interval - Check interval in milliseconds
+     * Global event handler that checks for DevTools on every user action.
+     */
+    function globalEventHandler() {
+      if (checkDevTools()) {
+        showWarning();
+      }
+    }
+
+    /**
+     * Attach global event listeners so that every click, keydown, mousemove, or touchstart triggers a check.
+     */
+    function attachGlobalListeners() {
+      const events = ['click', 'keydown', 'mousemove', 'touchstart'];
+      events.forEach(eventName => {
+        document.addEventListener(eventName, globalEventHandler, false);
+      });
+    }
+
+    /**
+     * Remove the global event listeners.
+     */
+    function removeGlobalListeners() {
+      const events = ['click', 'keydown', 'mousemove', 'touchstart'];
+      events.forEach(eventName => {
+        document.removeEventListener(eventName, globalEventHandler, false);
+      });
+    }
+
+    /**
+     * Start monitoring for DevTools by using both an interval check and global event listeners.
+     * @param {number} interval - The interval (in milliseconds) between interval checks.
      */
     function startMonitoring(interval = 1000) {
-      // Stop any existing monitoring
-      stopMonitoring();
-      
-      // Start new interval
+      attachGlobalListeners();
       checkInterval = setInterval(() => {
-        // Only check and show warning during active gameplay
-        if (window.appState && window.appState.gameActive) {
-          if (checkDevTools()) {
-            showWarning();
-          }
+        if (checkDevTools()) {
+          showWarning();
         }
       }, interval);
-      
       console.log("DevTools detection monitoring started");
     }
-    
+
     /**
-     * Stop monitoring for DevTools
+     * Stop monitoring for DevTools.
      */
     function stopMonitoring() {
       if (checkInterval) {
         clearInterval(checkInterval);
         checkInterval = null;
       }
+      removeGlobalListeners();
     }
-    
+
     // Public API
     return {
       startMonitoring,
@@ -401,7 +422,7 @@ const ErrorHandler = (function() {
       isDevToolsOpen: () => isDevToolsOpen
     };
   })();
-  
+
   /**
    * LocalStorageService
    * Provides a wrapper for localStorage with error handling and type conversion
