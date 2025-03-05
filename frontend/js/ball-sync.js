@@ -1,604 +1,653 @@
 /**
- * Enhanced Ball Synchronization System
- * Solves cross-monitor synchronization issues for multiplayer Pong
+ * ULTRA-AGGRESSIVE Ball Synchronization System
+ * Ensures perfect sync between players with multiple redundant techniques
  */
 (function() {
-    // Track game state
-    let isWindowMinimized = false;
-    let isGameRunning = false;
-    let lastSyncTime = 0;
-    let syncInterval = null;
-    let isLeftSide = true; // Determines if this is the left or right player
-    let localAuthority = false; // Whether this client has authority over ball state
+    const SYNC_FREQUENCY_MS = 16;        // Sync every frame (~60fps)
+    const FULL_RESET_FREQUENCY = 10;     // Force full reset every 10 frames
+    const ERROR_THRESHOLD = 3;           // Extremely low threshold for corrections (3px)
+    const INTERPOLATION_WEIGHT = 0.9;    // Aggressive correction weight (90% new, 10% old)
+    const PING_FREQUENCY_MS = 1000;      // Check network latency every second
+    const MAX_PREDICTION_MS = 100;       // Maximum prediction window
     
-    // Time constants
-    const SYNC_INTERVAL_MS = 100;     // More frequent syncing (was 500ms)
-    const SYNC_TIMEOUT_MS = 1000;     // Shorter timeout (was 2000ms)
-    const AUTHORITY_DURATION_MS = 5000; // How long a side keeps authority
+    // State variables
+    let gameState = {
+        active: false,
+        latency: 0,
+        lastSyncTime: 0,
+        frameCount: 0,
+        isLeftSide: null,               // null means we don't know yet
+        ballAuthority: false,
+        syncEnabled: true,
+        pingStart: 0,
+        lastBallReset: 0
+    };
     
-    // Ball state history for interpolation
-    const stateHistory = [];
-    const MAX_HISTORY = 10;
+    // Ball state history
+    const ballHistory = [];
+    const MAX_HISTORY = 30;              // 0.5 seconds at 60fps
     
-    // Initialize the enhanced ball sync system
-    function initBallSync() {
-        console.log("Initializing enhanced ball synchronization system...");
+    // Debug mode
+    const DEBUG = true;
+    
+    // Initialize
+    function init() {
+        debug("Ultra-aggressive ball sync initializing");
         
-        // Set up visibility change detection
-        setupVisibilityDetection();
-        
-        // Set up WebSocket handlers for ball sync
-        setupNetworkSync();
-        
-        // Set up predictive corrections
-        setupPredictiveCorrections();
-        
-        // Start position negotiation
-        startPositionNegotiation();
-    }
-    
-    // Set up visibility change detection (unchanged)
-    function setupVisibilityDetection() {
-        document.addEventListener('visibilitychange', handleVisibilityChange);
-        window.addEventListener('blur', () => setMinimized(true));
-        window.addEventListener('focus', () => setMinimized(false));
-        document.addEventListener('fullscreenchange', handleFullscreenChange);
-        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
-        console.log("Visibility detection initialized");
-    }
-    
-    // Handle document visibility change (unchanged)
-    function handleVisibilityChange() {
-        if (document.hidden) {
-            setMinimized(true);
-        } else {
-            setTimeout(() => setMinimized(false), 100);
-        }
-    }
-    
-    // Handle fullscreen change (unchanged)
-    function handleFullscreenChange() {
-        const isFullscreen = !!document.fullscreenElement || 
-                           !!document.webkitFullscreenElement;
-        
-        if (isFullscreen && isWindowMinimized) {
-            setMinimized(false);
-        }
-    }
-    
-    // Set minimized state (unchanged)
-    function setMinimized(minimized) {
-        if (isWindowMinimized === minimized) return;
-        
-        console.log("Window minimized state:", minimized);
-        isWindowMinimized = minimized;
-        
-        if (minimized) {
-            handleGameMinimized();
-        } else {
-            handleGameRestored();
-        }
-    }
-    
-    // Handle game being minimized (unchanged)
-    function handleGameMinimized() {
-        showMinimizedIndicator(true);
-        sendGameStatus('minimized');
-        
-        // Relinquish ball authority when minimized
-        if (localAuthority) {
-            localAuthority = false;
-            sendAuthorityUpdate(false);
-        }
-    }
-    
-    // Handle game being restored (unchanged)
-    function handleGameRestored() {
-        showMinimizedIndicator(false);
-        requestBallSync();
-        sendGameStatus('restored');
-    }
-    
-    // Set up WebSocket handlers for enhanced ball sync
-    function setupNetworkSync() {
-        // Wait for WebSocketManager to be available
-        const checkInterval = setInterval(function() {
-            if (!window.WebSocketManager) return;
+        // Add a delay to initial setup to allow the game to initialize
+        setTimeout(() => {
+            setupNetworkHooks();
+            setupGameHooks();
+            createDebugUI();
+            startSyncLoop();
             
-            clearInterval(checkInterval);
-            console.log("WebSocketManager found - setting up enhanced ball sync");
+            // Start latency measurement
+            measureLatency();
+            setInterval(measureLatency, PING_FREQUENCY_MS);
+        }, 1000); // 1-second delay before initializing
+    }
+    
+    // Debug logging
+    function debug(...args) {
+        if (DEBUG) {
+            console.log("[BALL-SYNC]", ...args);
+        }
+    }
+    
+    // Create debug UI
+    function createDebugUI() {
+        if (!DEBUG) return;
+        
+        const debugPanel = document.createElement('div');
+        debugPanel.id = 'ball-sync-debug';
+        debugPanel.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 5px;
+            border-radius: 5px;
+            z-index: 10000;
+            pointer-events: none;
+            max-width: 200px;
+            overflow: hidden;
+        `;
+        document.body.appendChild(debugPanel);
+        
+        // Update debug info
+        setInterval(() => {
+            if (!document.getElementById('ball-sync-debug')) return;
             
-            // Get original send update function
-            const originalSendUpdate = WebSocketManager.sendPaddleUpdate;
+            let ballX = "N/A";
+            let ballY = "N/A";
             
-            // Override to include authority information
-            WebSocketManager.sendPaddleUpdate = function(paddleY) {
-                if (isWindowMinimized) {
-                    return false;
+            try {
+                if (window.PongGame && typeof PongGame.getState === 'function') {
+                    const state = PongGame.getState();
+                    if (state && state.ball && typeof state.ball.x === 'number') {
+                        ballX = state.ball.x.toFixed(2);
+                        ballY = state.ball.y.toFixed(2);
+                    }
                 }
+            } catch (e) {
+                // Silently handle errors during debug info gathering
+                debug("Error getting ball info:", e);
+            }
+            
+            debugPanel.innerHTML = `
+                <div>Sync: ${gameState.syncEnabled ? 'ON' : 'OFF'}</div>
+                <div>Side: ${gameState.isLeftSide === null ? 'UNKNOWN' : gameState.isLeftSide ? 'LEFT' : 'RIGHT'}</div>
+                <div>Authority: ${gameState.ballAuthority ? 'YES' : 'NO'}</div>
+                <div>Latency: ${gameState.latency}ms</div>
+                <div>Ball: ${ballX}, ${ballY}</div>
+                <div>History: ${ballHistory.length} entries</div>
+            `;
+        }, 200);
+    }
+    
+    // Setup network hooks
+    function setupNetworkHooks() {
+        // Wait for WebSocketManager to be available
+        waitForObject('WebSocketManager', (wsm) => {
+            debug("WebSocketManager found - intercepting");
+            
+            // Hook into the onGameUpdate method
+            const originalHandler = wsm.handleGameUpdate || function() {};
+            wsm.handleGameUpdate = function(data) {
+                // Call original first for any paddle updates
+                originalHandler.call(this, data);
                 
-                const result = originalSendUpdate.call(this, paddleY);
-                
-                // Determine if we're the left side based on paddle updates
-                // Left paddle is controlled by this client
-                isLeftSide = true;
-                
-                return result;
+                // Process ball sync messages
+                processSyncMessage(data);
             };
             
-            // Create new function for ball sync
-            WebSocketManager.requestBallSync = function() {
+            // Override sendPaddleUpdate
+            const originalSendPaddle = wsm.sendPaddleUpdate || function() {};
+            wsm.sendPaddleUpdate = function(paddleY) {
+                // Side detection: if we're sending paddle updates, we're likely left side
+                if (gameState.isLeftSide === null) {
+                    determinePlayerSide(true);
+                }
+                
+                return originalSendPaddle.call(this, paddleY);
+            };
+            
+            // Add ping method for latency measurement
+            wsm.sendPing = function() {
+                gameState.pingStart = performance.now();
                 return this.send({
                     type: "game_update",
                     data: { 
-                        syncRequest: true,
-                        timestamp: Date.now(),
-                        isLeftSide: isLeftSide 
+                        pingRequest: true,
+                        timestamp: gameState.pingStart
                     }
                 });
             };
             
-            // Override the existing game update handler
-            const originalGameUpdateHandler = WebSocketManager.handleGameUpdate || function() {};
-            
-            WebSocketManager.handleGameUpdate = function(data) {
-                // Process sync messages
-                if (data) {
-                    // Handle ball sync requests
-                    if (data.syncRequest) {
-                        handleBallSyncRequest(data);
-                    }
-                    
-                    // Handle ball position updates
-                    if (data.ballPosition) {
-                        applyBallSync(data.ballPosition, data.hasAuthority);
-                    }
-                    
-                    // Handle authority updates
-                    if (data.authorityUpdate !== undefined) {
-                        handleAuthorityUpdate(data.authorityUpdate, data.isLeftSide);
-                    }
-                    
-                    // Handle player status updates
-                    if (data.playerStatus) {
-                        handlePlayerStatusUpdate(data.playerStatus);
-                    }
-                }
+            // Add ball sync method
+            wsm.sendBallSync = function(forced = false) {
+                if (!gameState.active || !gameState.syncEnabled) return false;
                 
-                // Call original handler for paddle position etc.
-                if (typeof originalGameUpdateHandler === 'function') {
-                    originalGameUpdateHandler.call(this, data);
-                }
-            };
-            
-            // Start periodic sync
-            startPeriodicSync();
-        }, 100);
-    }
-    
-    // Set up predictive corrections for smoother gameplay
-    function setupPredictiveCorrections() {
-        // Wait for PongGame to be available
-        const checkInterval = setInterval(function() {
-            if (!window.PongGame) return;
-            
-            clearInterval(checkInterval);
-            console.log("PongGame found - setting up predictive corrections");
-            
-            // Get original update function
-            const originalUpdate = PongGame.update;
-            
-            // Override to apply prediction and correction
-            if (typeof originalUpdate === 'function') {
-                PongGame.update = function(deltaFactor) {
-                    // Call original update
-                    originalUpdate.call(this, deltaFactor);
-                    
-                    // Apply prediction or correction based on authority
-                    if (!localAuthority) {
-                        applyPredictiveCorrection();
-                    }
-                };
-            }
-        }, 100);
-    }
-    
-    // Apply predictive correction to smooth ball movement between syncs
-    function applyPredictiveCorrection() {
-        // Only apply if we have enough history
-        if (stateHistory.length < 2) return;
-        
-        // Get current ball state
-        const gameState = PongGame.getState();
-        if (!gameState || !gameState.ball) return;
-        
-        // Use the two most recent history entries to predict current position
-        const mostRecent = stateHistory[stateHistory.length - 1];
-        const previous = stateHistory[stateHistory.length - 2];
-        
-        // Calculate time elapsed since most recent update
-        const timeElapsed = Date.now() - mostRecent.timestamp;
-        
-        // Apply prediction at small errors, correction at large errors
-        const diffX = Math.abs(gameState.ball.x - mostRecent.x);
-        const diffY = Math.abs(gameState.ball.y - mostRecent.y);
-        
-        if (diffX > 50 || diffY > 50) {
-            // Large error - apply full correction
-            updateBallPosition(mostRecent);
-        } else if (diffX > 10 || diffY > 10) {
-            // Medium error - blend current with correction
-            const blend = 0.3; // 30% correction, 70% current
-            const correctedX = blend * mostRecent.x + (1 - blend) * gameState.ball.x;
-            const correctedY = blend * mostRecent.y + (1 - blend) * gameState.ball.y;
-            
-            updateBallPosition({
-                x: correctedX,
-                y: correctedY,
-                vx: mostRecent.vx,
-                vy: mostRecent.vy,
-                speed: mostRecent.speed
-            });
-        }
-        // Small errors are allowed as-is for smoother local appearance
-    }
-    
-    // Start periodic ball sync
-    function startPeriodicSync() {
-        // Clear any existing interval
-        if (syncInterval) {
-            clearInterval(syncInterval);
-        }
-        
-        // Set up new interval
-        syncInterval = setInterval(function() {
-            if (isGameRunning) {
-                const now = Date.now();
+                // Get current ball state
+                const ball = getBallState();
+                if (!ball) return false;
                 
-                // If we have authority, send position updates
-                if (localAuthority && !isWindowMinimized) {
-                    sendBallPosition(true);
-                }
-                // Otherwise request updates if it's been too long
-                else if (now - lastSyncTime > SYNC_TIMEOUT_MS) {
-                    requestBallSync();
-                }
-            }
-        }, SYNC_INTERVAL_MS);
-    }
-    
-    // Start position authority negotiation
-    function startPositionNegotiation() {
-        // Determine initial authority
-        setTimeout(() => {
-            // Initially, give authority to the left side
-            if (isLeftSide) {
-                localAuthority = true;
-                sendAuthorityUpdate(true);
-                console.log("Taking initial ball authority (left side)");
-            }
-            
-            // Set up authority rotation
-            setInterval(() => {
-                if (isGameRunning && !isWindowMinimized) {
-                    // Toggle authority between sides every AUTHORITY_DURATION_MS
-                    if (localAuthority) {
-                        // We currently have authority, check if it's time to transfer
-                        const gameState = PongGame.getState();
-                        if (gameState && gameState.ball) {
-                            // Transfer authority when ball crosses center
-                            const centerX = document.getElementById('pong-canvas')?.width / 2 || 400;
-                            const isRightSide = gameState.ball.x > centerX;
-                            
-                            if ((isLeftSide && isRightSide) || (!isLeftSide && !isRightSide)) {
-                                // Ball is on the other player's side, transfer authority
-                                localAuthority = false;
-                                sendAuthorityUpdate(false);
-                                console.log("Transferring ball authority to other side");
-                            }
+                return this.send({
+                    type: "game_update",
+                    data: {
+                        ballSync: {
+                            x: ball.x,
+                            y: ball.y,
+                            vx: ball.vx,
+                            vy: ball.vy,
+                            speed: ball.speed,
+                            radius: ball.radius,
+                            timestamp: performance.now(),
+                            forced: forced,
+                            side: gameState.isLeftSide
                         }
                     }
-                }
-            }, 1000); // Check every second
-        }, 1000); // Initial delay
-    }
-    
-    // Request a ball position sync from other players
-    function requestBallSync() {
-        if (window.WebSocketManager && WebSocketManager.requestBallSync) {
-            console.log("Requesting ball sync");
-            WebSocketManager.requestBallSync();
-            lastSyncTime = Date.now();
-        }
-    }
-    
-    // Send our ball position to other players
-    function sendBallPosition(withAuthority = false) {
-        if (!window.WebSocketManager || !window.PongGame) return;
-        if (!WebSocketManager.send || !PongGame.getState) return;
-        
-        // Get current ball state
-        const gameState = PongGame.getState();
-        if (!gameState || !gameState.ball) return;
-        
-        // Send ball position update with authority flag
-        WebSocketManager.send({
-            type: "game_update",
-            data: {
-                ballPosition: {
-                    x: gameState.ball.x,
-                    y: gameState.ball.y,
-                    vx: gameState.ball.vx,
-                    vy: gameState.ball.vy,
-                    speed: gameState.ball.speed,
-                    timestamp: Date.now()
-                },
-                hasAuthority: withAuthority,
-                isLeftSide: isLeftSide
-            }
+                });
+            };
         });
     }
     
-    // Send authority update
-    function sendAuthorityUpdate(hasAuthority) {
+    // Process sync messages from the network
+    function processSyncMessage(data) {
+        if (!data) return;
+        
+        // Handle ping/pong for latency measurement
+        if (data.pingRequest) {
+            // Send pong response
+            sendPongResponse(data.timestamp);
+        }
+        
+        if (data.pongResponse) {
+            // Calculate latency
+            const now = performance.now();
+            const sentTime = data.originalTimestamp;
+            gameState.latency = Math.round((now - sentTime) / 2); // RTT/2
+            debug("Latency measured:", gameState.latency, "ms");
+        }
+        
+        // Handle ball sync
+        if (data.ballSync) {
+            processBallSync(data.ballSync);
+        }
+        
+        // Handle ball reset
+        if (data.ballReset) {
+            processBallReset(data.ballReset);
+        }
+        
+        // Handle side determination
+        if (data.sideInfo !== undefined) {
+            if (gameState.isLeftSide === null) {
+                determinePlayerSide(!data.sideInfo);
+            }
+        }
+    }
+    
+    // Process ball synchronization data
+    function processBallSync(ballData) {
+        // Reject if we don't know our side yet
+        if (gameState.isLeftSide === null) return;
+        
+        // Update last sync time
+        gameState.lastSyncTime = performance.now();
+        
+        // Update side info if different from what we think
+        if (ballData.side !== undefined && ballData.side !== gameState.isLeftSide) {
+            debug("Side mismatch detected, updating");
+            gameState.isLeftSide = !ballData.side;
+            determineAuthority();
+        }
+        
+        // Decide whether to apply this sync based on authority rules
+        let shouldApply = false;
+        
+        // Rule 1: If it's a forced sync, always apply it
+        if (ballData.forced) {
+            shouldApply = true;
+        }
+        // Rule 2: If we don't have authority, apply it
+        else if (!gameState.ballAuthority) {
+            shouldApply = true;
+        }
+        // Rule 3: If the ball is heading towards us, other side has authority
+        else {
+            const ball = getBallState();
+            if (ball) {
+                // For left side (ball moving left)
+                if (gameState.isLeftSide && ball.vx < 0) {
+                    shouldApply = true;
+                }
+                // For right side (ball moving right)
+                else if (!gameState.isLeftSide && ball.vx > 0) {
+                    shouldApply = true;
+                }
+            }
+        }
+        
+        // Add to history regardless
+        ballHistory.push({...ballData, received: performance.now()});
+        while (ballHistory.length > MAX_HISTORY) {
+            ballHistory.shift();
+        }
+        
+        // Apply if needed
+        if (shouldApply) {
+            updateBallPosition(ballData, true);
+        }
+    }
+    
+    // Process ball reset command
+    function processBallReset(resetData) {
+        // If we've already done a more recent reset, ignore
+        if (resetData.timestamp < gameState.lastBallReset) return;
+        
+        gameState.lastBallReset = resetData.timestamp;
+        
+        // Apply the reset
+        updateBallPosition(resetData, true);
+        
+        debug("Applied forced ball reset");
+    }
+    
+    // Send a pong response to a ping
+    function sendPongResponse(originalTimestamp) {
         if (window.WebSocketManager && WebSocketManager.send) {
             WebSocketManager.send({
                 type: "game_update",
                 data: {
-                    authorityUpdate: hasAuthority,
-                    isLeftSide: isLeftSide,
-                    timestamp: Date.now()
+                    pongResponse: true,
+                    originalTimestamp: originalTimestamp,
+                    timestamp: performance.now()
                 }
             });
         }
     }
     
-    // Handle a ball sync request from another player
-    function handleBallSyncRequest(data) {
-        // Only respond with position if we have authority
-        if (localAuthority) {
-            sendBallPosition(true);
-        }
-        
-        // Update our side flag based on the request
-        if (data.isLeftSide !== undefined) {
-            isLeftSide = !data.isLeftSide; // We're the opposite side
+    // Measure network latency
+    function measureLatency() {
+        if (window.WebSocketManager && WebSocketManager.sendPing) {
+            WebSocketManager.sendPing();
         }
     }
     
-    // Handle authority update from the other player
-    function handleAuthorityUpdate(hasAuthority, otherIsLeftSide) {
-        if (otherIsLeftSide !== undefined) {
-            isLeftSide = !otherIsLeftSide; // We're the opposite side
-        }
-        
-        // If other player is giving up authority, take it
-        if (!hasAuthority) {
-            localAuthority = true;
-            console.log("Taking ball authority");
-        }
-        // If other player is claiming authority, release it
-        else if (localAuthority) {
-            localAuthority = false;
-            console.log("Releasing ball authority");
-        }
-    }
-    
-    // Apply ball position sync from network
-    function applyBallSync(ballPosition, remoteHasAuthority) {
-        // Update the last sync time
-        lastSyncTime = Date.now();
-        
-        // Only apply if we don't have authority or remote explicitly has authority
-        if (!localAuthority || remoteHasAuthority) {
-            // Add to state history for interpolation
-            stateHistory.push({...ballPosition});
-            while (stateHistory.length > MAX_HISTORY) {
-                stateHistory.shift();
+    // Setup game hooks
+    function setupGameHooks() {
+        // Wait for PongGame to be available
+        waitForObject('PongGame', (game) => {
+            debug("PongGame found - intercepting");
+            
+            // Hook into start method
+            const originalStart = game.start;
+            game.start = function() {
+                debug("Game starting");
+                gameState.active = true;
+                gameState.frameCount = 0;
+                
+                // Reset history
+                ballHistory.length = 0;
+                
+                // Determine side if not already done
+                if (gameState.isLeftSide === null) {
+                    // Default to left side, will be corrected once paddle moves
+                    determinePlayerSide(true);
+                }
+                
+                // Call original
+                const result = originalStart.apply(this, arguments);
+                
+                // Send our side info
+                sendSideInfo();
+                
+                return result;
+            };
+            
+            // Hook into stop method
+            const originalStop = game.stop;
+            game.stop = function() {
+                debug("Game stopping");
+                gameState.active = false;
+                
+                // Call original
+                return originalStop.apply(this, arguments);
+            };
+            
+            // Hook into update method
+            const originalUpdate = game.update;
+            if (typeof originalUpdate === 'function') {
+                game.update = function(deltaFactor) {
+                    if (!gameState.active || !gameState.syncEnabled) {
+                        return originalUpdate.apply(this, arguments);
+                    }
+                    
+                    // Increment frame counter
+                    gameState.frameCount++;
+                    
+                    // Determine if we should apply a full reset
+                    const needsFullReset = (gameState.frameCount % FULL_RESET_FREQUENCY === 0);
+                    if (needsFullReset && gameState.ballAuthority) {
+                        // We're the authority, tell others to fully reset
+                        sendBallReset();
+                    }
+                    
+                    // Check for sync issues before calling original update
+                    if (!gameState.ballAuthority) {
+                        detectAndCorrectDrift();
+                    }
+                    
+                    // Call original update
+                    const result = originalUpdate.apply(this, arguments);
+                    
+                    // After update, send our ball state if we're the authority
+                    if (gameState.ballAuthority) {
+                        sendBallUpdate(needsFullReset);
+                    }
+                    
+                    return result;
+                };
             }
             
-            // Apply the position update
-            updateBallPosition(ballPosition);
-        }
+            // Add a method to explicitly update ball position
+            game.updateBallPosition = function(position) {
+                // Try to find the ball
+                const ball = getBallDirectly();
+                if (!ball) return false;
+                
+                // Update all properties
+                if (position.x !== undefined) ball.x = position.x;
+                if (position.y !== undefined) ball.y = position.y;
+                if (position.vx !== undefined) ball.vx = position.vx;
+                if (position.vy !== undefined) ball.vy = position.vy;
+                if (position.speed !== undefined) ball.speed = position.speed;
+                
+                return true;
+            };
+        });
     }
     
-    // Update ball position in the game
-    function updateBallPosition(position) {
-        // Only if we have PongGame available
-        if (!window.PongGame || !PongGame.getState) return;
-        
-        // Get the ball object
-        const gameState = PongGame.getState();
-        if (!gameState || !gameState.ball) return;
-        
-        // Find all possible ways to update the ball position
-        if (window.ball) {
-            // Direct access
-            window.ball.x = position.x;
-            window.ball.y = position.y;
-            window.ball.vx = position.vx;
-            window.ball.vy = position.vy;
-            window.ball.speed = position.speed;
-        } else if (PongGame.updateBallPosition) {
-            // Method may exist
-            PongGame.updateBallPosition(position);
-        } else if (PongGame.setBallState) {
-            // Alternative method
-            PongGame.setBallState(position);
-        } else {
-            // Try to access ball through internal structures
-            const internalBall = findBallObject();
-            if (internalBall) {
-                internalBall.x = position.x;
-                internalBall.y = position.y;
-                internalBall.vx = position.vx;
-                internalBall.vy = position.vy;
-                internalBall.speed = position.speed;
+    // Start the sync loop
+    function startSyncLoop() {
+        setInterval(() => {
+            if (!gameState.active || !gameState.syncEnabled) return;
+            
+            if (gameState.ballAuthority) {
+                // We already sync in the update hook
             } else {
-                console.warn("Unable to update ball position - no suitable method found");
+                // Check for drift and request sync if needed
+                const now = performance.now();
+                if (now - gameState.lastSyncTime > SYNC_FREQUENCY_MS * 3) {
+                    requestSync();
+                }
             }
+        }, SYNC_FREQUENCY_MS);
+    }
+    
+    // Request sync from other player
+    function requestSync() {
+        if (window.WebSocketManager && WebSocketManager.send) {
+            WebSocketManager.send({
+                type: "game_update",
+                data: {
+                    syncRequest: true,
+                    timestamp: performance.now()
+                }
+            });
         }
     }
     
-    // Try to find the ball object in various places
-    function findBallObject() {
-        // Check common patterns
-        if (window.ball) return window.ball;
-        if (window.PongGame && PongGame.ball) return PongGame.ball;
-        if (window.PongGame && PongGame.getState) {
-            const state = PongGame.getState();
-            if (state && state.ball) return state.ball;
+    // Send ball position update
+    function sendBallUpdate(forced = false) {
+        if (window.WebSocketManager && WebSocketManager.sendBallSync) {
+            WebSocketManager.sendBallSync(forced);
+        }
+    }
+    
+    // Send a full ball reset command
+    function sendBallReset() {
+        const ball = getBallState();
+        if (!ball || !window.WebSocketManager || !WebSocketManager.send) return;
+        
+        // Generate a reset command with current state
+        WebSocketManager.send({
+            type: "game_update",
+            data: {
+                ballReset: {
+                    x: ball.x,
+                    y: ball.y,
+                    vx: ball.vx,
+                    vy: ball.vy,
+                    speed: ball.speed,
+                    radius: ball.radius,
+                    timestamp: performance.now()
+                }
+            }
+        });
+        
+        // Update our own last reset time
+        gameState.lastBallReset = performance.now();
+    }
+    
+    // Send our side information
+    function sendSideInfo() {
+        if (window.WebSocketManager && WebSocketManager.send) {
+            WebSocketManager.send({
+                type: "game_update",
+                data: {
+                    sideInfo: gameState.isLeftSide, 
+                    timestamp: performance.now()
+                }
+            });
+        }
+    }
+    
+    // Determine which side this player is on
+    function determinePlayerSide(isLeft) {
+        // Update our side
+        gameState.isLeftSide = isLeft;
+        debug("Player side determined:", isLeft ? "LEFT" : "RIGHT");
+        
+        // Determine ball authority based on side
+        determineAuthority();
+        
+        // Send our side info to other player
+        sendSideInfo();
+    }
+    
+    // Determine ball authority
+    function determineAuthority() {
+        // Get current ball state
+        const ball = getBallState();
+        if (!ball) {
+            gameState.ballAuthority = gameState.isLeftSide; // Default: left side has authority
+            return;
         }
         
-        // Try to find any object that looks like a ball
-        for (let key in window) {
-            const obj = window[key];
-            if (obj && typeof obj === 'object' && 
-                'x' in obj && 'y' in obj && 
-                'vx' in obj && 'vy' in obj && 
-                'radius' in obj) {
-                return obj;
+        // Determine authority based on ball direction
+        if (ball.vx > 0) {
+            // Ball moving right, left side has authority
+            gameState.ballAuthority = gameState.isLeftSide;
+        } else {
+            // Ball moving left, right side has authority
+            gameState.ballAuthority = !gameState.isLeftSide;
+        }
+        
+        debug("Ball authority:", gameState.ballAuthority ? "YES" : "NO");
+    }
+    
+    // Update ball position
+    function updateBallPosition(position, force = false) {
+        // Skip if we're the authority and not forced
+        if (gameState.ballAuthority && !force) return;
+        
+        // Try all possible methods to update the ball
+        
+        // Method 1: Use PongGame.updateBallPosition
+        if (window.PongGame && PongGame.updateBallPosition) {
+            PongGame.updateBallPosition(position);
+        }
+        
+        // Method 2: Direct update of ball object
+        const ball = getBallDirectly();
+        if (ball) {
+            // Update all properties with interpolation for smoother movement
+            if (position.x !== undefined) ball.x = interpolateValue(ball.x, position.x, INTERPOLATION_WEIGHT);
+            if (position.y !== undefined) ball.y = interpolateValue(ball.y, position.y, INTERPOLATION_WEIGHT);
+            if (position.vx !== undefined) ball.vx = position.vx; // Don't interpolate velocities
+            if (position.vy !== undefined) ball.vy = position.vy;
+            if (position.speed !== undefined) ball.speed = position.speed;
+        }
+    }
+    
+    // Detect and correct drift between local and remote ball state
+    function detectAndCorrectDrift() {
+        // Need at least one history entry
+        if (ballHistory.length === 0) return;
+        
+        // Get current ball state
+        const ball = getBallState();
+        if (!ball) return;
+        
+        // Get latest history entry
+        const latest = ballHistory[ballHistory.length - 1];
+        
+        // Calculate time since that update
+        const now = performance.now();
+        const elapsed = now - latest.received;
+        
+        // Skip if too recent
+        if (elapsed < 5) return;
+        
+        // Predict where ball should be now
+        const predictedX = latest.x + (latest.vx * (elapsed / 16)); // 16ms is ~60fps
+        const predictedY = latest.y + (latest.vy * (elapsed / 16));
+        
+        // Calculate drift
+        const driftX = Math.abs(ball.x - predictedX);
+        const driftY = Math.abs(ball.y - predictedY);
+        
+        // If drift exceeds threshold, apply correction
+        if (driftX > ERROR_THRESHOLD || driftY > ERROR_THRESHOLD) {
+            // Create a prediction with latest velocity
+            const prediction = {
+                x: predictedX,
+                y: predictedY,
+                vx: latest.vx,
+                vy: latest.vy,
+                speed: latest.speed
+            };
+            
+            // Apply the correction
+            updateBallPosition(prediction, true);
+        }
+    }
+    
+    // Get ball state from PongGame
+    function getBallState() {
+        try {
+            if (window.PongGame && typeof PongGame.getState === 'function') {
+                const state = PongGame.getState();
+                if (state && state.ball && 
+                    typeof state.ball.x === 'number' && 
+                    typeof state.ball.y === 'number' &&
+                    typeof state.ball.vx === 'number' && 
+                    typeof state.ball.vy === 'number') {
+                    return state.ball;
+                }
             }
+        } catch (e) {
+            debug("Error getting ball state:", e);
+        }
+        return null;
+    }
+    
+    
+    // Get direct reference to ball object
+    function getBallDirectly() {
+        try {
+            // Method 1: Through PongGame.getState
+            if (window.PongGame && typeof PongGame.getState === 'function') {
+                const state = PongGame.getState();
+                if (state && state.ball) {
+                    return state.ball;
+                }
+            }
+            
+            // Method 2: Direct global variable
+            if (window.ball) {
+                return window.ball;
+            }
+        } catch (e) {
+            debug("Error accessing ball directly:", e);
         }
         
         return null;
     }
     
-    // Handle player status update
-    function handlePlayerStatusUpdate(status) {
-        // If other player is minimized, show indicator
-        if (status === 'minimized') {
-            showOpponentMinimizedIndicator(true);
-        } else if (status === 'restored') {
-            showOpponentMinimizedIndicator(false);
-        }
-    }
-    
-    // Send game status to other players
-    function sendGameStatus(status) {
-        if (window.WebSocketManager && WebSocketManager.send) {
-            WebSocketManager.send({
-                type: "game_update",
-                data: {
-                    playerStatus: status
-                }
-            });
-        }
-    }
-    
-    // Show minimized indicator (simplified version)
-    function showMinimizedIndicator(show) {
-        // Find or create the indicator
-        let indicator = document.getElementById('minimized-indicator');
+    // Helper function to wait for an object to be defined
+    function waitForObject(objectName, callback, maxTries = 100, interval = 100) {
+        let tries = 0;
         
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.id = 'minimized-indicator';
-            indicator.style.cssText = `
-                position: fixed;
-                top: 50%;
-                left: 50%;
-                transform: translate(-50%, -50%);
-                background: rgba(0, 0, 0, 0.8);
-                color: #fff;
-                padding: 15px 25px;
-                border-radius: 8px;
-                font-size: 18px;
-                z-index: 1000;
-                display: none;
-                box-shadow: 0 0 15px rgba(0, 212, 255, 0.5);
-            `;
-            indicator.innerHTML = 'Game Minimized - Click to Resume';
-            document.body.appendChild(indicator);
-            
-            // Add click handler to restore fullscreen
-            indicator.addEventListener('click', function() {
-                const canvas = document.getElementById('pong-canvas');
-                if (canvas && document.fullscreenEnabled) {
-                    canvas.requestFullscreen().catch(err => {
-                        console.error("Error attempting to enable fullscreen:", err);
-                    });
-                }
-                setMinimized(false);
-            });
+        const check = () => {
+            tries++;
+            if (window[objectName]) {
+                callback(window[objectName]);
+                return true;
+            } else if (tries >= maxTries) {
+                debug(`Timed out waiting for ${objectName}`);
+                return false;
+            }
+            setTimeout(check, interval);
+            return false;
+        };
+        
+        check();
+    }
+    
+    // Helper function to interpolate between values
+    function interpolateValue(current, target, weight) {
+        return current + (target - current) * weight;
+    }
+    
+    // Add keyboard shortcut to toggle sync for testing
+    document.addEventListener('keydown', (e) => {
+        // Ctrl+Alt+S to toggle sync
+        if (e.ctrlKey && e.altKey && e.key === 's') {
+            gameState.syncEnabled = !gameState.syncEnabled;
+            debug("Ball sync " + (gameState.syncEnabled ? "ENABLED" : "DISABLED"));
         }
-        
-        // Show/hide
-        indicator.style.display = show ? 'block' : 'none';
-    }
-    
-    // Show opponent minimized warning
-    function showOpponentMinimizedIndicator(show) {
-        // Find or create the indicator
-        let indicator = document.getElementById('opponent-minimized');
-        
-        if (!indicator) {
-            indicator = document.createElement('div');
-            indicator.id = 'opponent-minimized';
-            indicator.style.cssText = `
-                position: fixed;
-                top: 10px;
-                left: 50%;
-                transform: translateX(-50%);
-                background: rgba(255, 193, 7, 0.8);
-                color: #000;
-                padding: 8px 15px;
-                border-radius: 5px;
-                font-size: 14px;
-                font-weight: bold;
-                z-index: 1000;
-                display: none;
-            `;
-            indicator.innerHTML = 'Opponent\'s Game is Minimized';
-            document.body.appendChild(indicator);
-        }
-        
-        // Show/hide
-        indicator.style.display = show ? 'block' : 'none';
-    }
-    
-    // Hook into PongGame to detect when game is running
-    function monitorGameState() {
-        // Check for PongGame periodically
-        const checkInterval = setInterval(function() {
-            if (!window.PongGame) return;
-            
-            clearInterval(checkInterval);
-            
-            // Save original start/stop functions
-            const originalStart = PongGame.start;
-            const originalStop = PongGame.stop;
-            
-            // Override start
-            PongGame.start = function() {
-                // Call original
-                originalStart.apply(this, arguments);
-                
-                // Update state
-                isGameRunning = true;
-                console.log("Game started - enabling enhanced sync");
-                
-                // Initial sync request
-                setTimeout(requestBallSync, 500);
-            };
-            
-            // Override stop
-            PongGame.stop = function() {
-                // Call original
-                originalStop.apply(this, arguments);
-                
-                // Update state
-                isGameRunning = false;
-                localAuthority = false;
-                console.log("Game stopped - disabling sync");
-            };
-        }, 100);
-    }
-    
-    // Initialize when DOM is ready
-    document.addEventListener('DOMContentLoaded', function() {
-        console.log("Initializing enhanced ball synchronization");
-        initBallSync();
-        monitorGameState();
     });
+    
+    // Initialize when DOM loaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
 })();

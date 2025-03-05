@@ -1,0 +1,136 @@
+/**
+ * ULTRA-AGGRESSIVE Ball Synchronization System
+ * Ensures perfect sync between players with multiple redundant techniques
+ */
+(function() {
+    // CONSTANTS and state variables remain the same
+    
+    // Debug logging
+    function debug(...args) {
+        if (DEBUG) {
+            console.log("[BALL-SYNC]", ...args);
+        }
+    }
+    
+    // Create debug UI - FIXED
+    function createDebugUI() {
+        if (!DEBUG) return;
+        
+        const debugPanel = document.createElement('div');
+        debugPanel.id = 'ball-sync-debug';
+        debugPanel.style.cssText = `
+            position: fixed;
+            top: 10px;
+            right: 10px;
+            background: rgba(0,0,0,0.7);
+            color: #fff;
+            font-family: monospace;
+            font-size: 10px;
+            padding: 5px;
+            border-radius: 5px;
+            z-index: 10000;
+            pointer-events: none;
+            max-width: 200px;
+            overflow: hidden;
+        `;
+        document.body.appendChild(debugPanel);
+        
+        // Update debug info
+        setInterval(() => {
+            if (!document.getElementById('ball-sync-debug')) return;
+            
+            let ballX = "N/A";
+            let ballY = "N/A";
+            
+            // FIXED: More robust ball state access
+            try {
+                if (window.PongGame && typeof PongGame.getState === 'function') {
+                    const state = PongGame.getState();
+                    if (state && state.ball && typeof state.ball.x === 'number') {
+                        ballX = state.ball.x.toFixed(2);
+                        ballY = state.ball.y.toFixed(2);
+                    }
+                }
+            } catch (e) {
+                // Silently handle errors during debug info gathering
+                debug("Error getting ball info:", e);
+            }
+            
+            debugPanel.innerHTML = `
+                <div>Sync: ${gameState.syncEnabled ? 'ON' : 'OFF'}</div>
+                <div>Side: ${gameState.isLeftSide === null ? 'UNKNOWN' : gameState.isLeftSide ? 'LEFT' : 'RIGHT'}</div>
+                <div>Authority: ${gameState.ballAuthority ? 'YES' : 'NO'}</div>
+                <div>Latency: ${gameState.latency}ms</div>
+                <div>Ball: ${ballX}, ${ballY}</div>
+                <div>History: ${ballHistory.length} entries</div>
+            `;
+        }, 200);
+    }
+    
+    // FIXED: Get ball state with proper error handling
+    function getBallState() {
+        try {
+            if (window.PongGame && typeof PongGame.getState === 'function') {
+                const state = PongGame.getState();
+                if (state && state.ball && 
+                    typeof state.ball.x === 'number' && 
+                    typeof state.ball.y === 'number' &&
+                    typeof state.ball.vx === 'number' && 
+                    typeof state.ball.vy === 'number') {
+                    return state.ball;
+                }
+            }
+        } catch (e) {
+            debug("Error getting ball state:", e);
+        }
+        return null;
+    }
+    
+    // FIXED: Get direct reference to ball object
+    function getBallDirectly() {
+        try {
+            // Method 1: Through PongGame.getState
+            if (window.PongGame && typeof PongGame.getState === 'function') {
+                const state = PongGame.getState();
+                if (state && state.ball) {
+                    return state.ball;
+                }
+            }
+            
+            // Method 2: Direct global variable
+            if (window.ball) {
+                return window.ball;
+            }
+        } catch (e) {
+            debug("Error accessing ball directly:", e);
+        }
+        
+        return null;
+    }
+    
+    // FIXED: Delay initialization until PongGame is available
+    function init() {
+        debug("Ultra-aggressive ball sync initializing");
+        
+        // Add a delay to initial setup to allow the game to initialize
+        setTimeout(() => {
+            setupNetworkHooks();
+            setupGameHooks();
+            createDebugUI();
+            startSyncLoop();
+            
+            // Start latency measurement
+            measureLatency();
+            setInterval(measureLatency, PING_FREQUENCY_MS);
+        }, 1000); // 1-second delay before initializing
+    }
+    
+    // The rest of the functions remain the same...
+    
+    // Initialize when DOM loaded
+    if (document.readyState === 'loading') {
+        document.addEventListener('DOMContentLoaded', init);
+    } else {
+        init();
+    }
+})();
