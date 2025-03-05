@@ -534,6 +534,32 @@ const App = (function() {
     }
     
     /**
+     * Initialize the tournament page
+     */
+    function initTournamentPage() {
+        console.log('Initializing tournament page...');
+        
+        // Reset state if needed
+        if (modules.tournament) {
+            modules.tournament.resetTournamentState();
+        }
+        
+        // Request latest tournament list
+        if (modules.websocket && modules.websocket.isConnected()) {
+            console.log('Requesting tournament list...');
+            modules.websocket.send({
+                type: 'get_tournaments'
+            });
+        } else {
+            const message = modules.localization ? 
+                modules.localization.get('connectionError') : 
+                'Connection error. Please check your internet connection.';
+                
+            showError(message);
+        }
+    }
+
+    /**
      * Handle page change events
      * @param {string} pageId - ID of the page being navigated to
      */
@@ -547,6 +573,9 @@ const App = (function() {
             if (modules.gdpr && modules.gdpr.init) {
                 modules.gdpr.init();
             }
+        } else if (pageId === 'tournament-page') {
+            // Initialize tournament page
+            initTournamentPage();
         }
     }
     
@@ -913,16 +942,34 @@ const App = (function() {
         const selectedMode = state.gameModes[state.ui.currentGameModeIndex];
         
         // Handle different game modes
-        if (selectedMode.id === 'tournament') {
-            handleTournamentMode(nickname);
-        } else if (selectedMode.id === 'custom') {
-            if (modules.ui) {
-                modules.ui.navigateTo('custom-game-page');
-            }
-        } else if (selectedMode.id === 'ai') {
-            startAIGame();
-        } else { // Classic with queue
-            startMultiplayerGame(nickname, state.user.token, state.game.rounds.target);
+        switch (selectedMode.id) {
+            case 'tournament':
+                // Go to tournament page instead of starting tournament immediately
+                if (modules.ui) {
+                    // Update Tournament Manager nickname first
+                    if (modules.tournament) {
+                        modules.tournament.setNickname(nickname);
+                    }
+                    modules.ui.navigateTo('tournament-page');
+                }
+                break;
+                
+            case 'custom':
+                // Go to custom game page
+                if (modules.ui) {
+                    modules.ui.navigateTo('custom-game-page');
+                }
+                break;
+                
+            case 'ai':
+                // Start AI game directly
+                startAIGame();
+                break;
+                
+            default:
+                // Classic with queue (default)
+                startMultiplayerGame(nickname, state.user.token, state.game.rounds.target);
+                break;
         }
     }
     

@@ -11,13 +11,13 @@ const UIManager = (function() {
     
     // Map of page IDs to URL paths for cleaner URLs
     const pageRoutes = {
-      'language-page': '/language',
-      'game-page': '/menu',
-      'pong-page': '/play',
-      'leaderboard-page': '/leaderboard',
-      'custom-game-page': '/custom',
-      'privacy-policy-page': '/privacy',
-      // Add any other pages here
+    'language-page': '/language',
+    'game-page': '/menu',
+    'pong-page': '/play',
+    'leaderboard-page': '/leaderboard',
+    'custom-game-page': '/custom',
+    'tournament-page': '/tournament',
+    'privacy-policy-page': '/privacy',
     };
     
     // Reverse mapping of paths to page IDs

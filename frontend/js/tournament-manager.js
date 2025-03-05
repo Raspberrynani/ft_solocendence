@@ -544,6 +544,12 @@ const TournamentManager = (function() {
       
       // Update tournament data
       currentTournament = tournament;
+
+      // Show leave warning when in a tournament
+      const tournamentLeaveWarning = document.getElementById('tournament-leave-warning');
+      if (tournamentLeaveWarning) {
+          tournamentLeaveWarning.style.display = 'block';
+      }
       
       // Check if there's a new match
       const hasNewMatch = tournament.current_match !== null;
@@ -588,6 +594,12 @@ const TournamentManager = (function() {
     function handleTournamentLeft() {
       console.log("Left tournament");
       resetTournamentState();
+
+      // Hide leave warning when exiting a tournament
+      const tournamentLeaveWarning = document.getElementById('tournament-leave-warning');
+      if (tournamentLeaveWarning) {
+          tournamentLeaveWarning.style.display = 'none';
+      }
       
       // Show toast notification if Utils is available
       if (typeof Utils !== 'undefined' && Utils.showToast) {
