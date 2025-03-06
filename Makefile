@@ -6,6 +6,9 @@ DOCKER_COMPOSE_FILE = docker-compose.yml
 DOCKER_COMPOSE_MONITORING = docker-compose.monitoring.yml
 DOCKER_COMPOSE_CMD = $(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) -f $(DOCKER_COMPOSE_MONITORING)
 
+# SSL certificate script
+SSL_SCRIPT = ./gen_ssl.sh
+
 # Set default goal
 .DEFAULT_GOAL := run
 
@@ -20,14 +23,27 @@ help:
 	@echo "  make re       - Rebuild and restart all containers (fclean + all)"
 	@echo "  make ps       - Show running containers"
 	@echo "  make logs     - Show logs from all containers"
+	@echo "  make ssl      - Generate SSL certificates"
 	@echo "  make help     - Show this help message"
 
+# Generate SSL certificates
+ssl:
+	@echo "Generating SSL certificates..."
+	@if [ -f $(SSL_SCRIPT) ]; then \
+		chmod +x $(SSL_SCRIPT); \
+		$(SSL_SCRIPT); \
+	else \
+		echo "Error: SSL script $(SSL_SCRIPT) not found"; \
+		exit 1; \
+	fi
+	@echo "SSL certificates generated successfully"
+
 # Run services (if already built)
-run:
+run: ssl
 	$(DOCKER_COMPOSE_CMD) up -d
 
 # Build and run services
-all: build run
+all: build ssl run
 
 # Build services without starting
 build:
@@ -57,4 +73,4 @@ logs:
 	$(DOCKER_COMPOSE_CMD) logs -f
 
 # Ensure these targets aren't matched with files
-.PHONY: help run all build clean fclean re ps logs
+.PHONY: help run all build clean fclean re ps logs ssl
