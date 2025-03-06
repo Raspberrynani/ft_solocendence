@@ -22,4 +22,5 @@ urlpatterns = [
     path('api/', include('api.urls')),  # Now includes /api/entries/ and /api/end_game/
     # If you have any HTTP endpoints for pong, you can include them here:
     # path('api/', include('pong.urls')),
+    path('', include('django_prometheus.urls')),
 ]

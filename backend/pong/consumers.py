@@ -9,6 +9,13 @@ import random
 import threading
 from datetime import datetime
 
+from api.metrics import (
+    GAME_STARTED, GAME_COMPLETED, GAME_DURATION, 
+    TOURNAMENT_CREATED, TOURNAMENT_PLAYERS,
+    ACTIVE_PLAYERS, WAITING_PLAYERS,
+    WEBSOCKET_CONNECTIONS, WEBSOCKET_MESSAGES
+)
+
 # Configure logging
 logger = logging.getLogger(__name__)
 
@@ -19,6 +26,7 @@ active_games = {}  # Maps channel_name to game room
 # Tournament tracking
 active_tournaments = {}  # Maps tournament_id to Tournament object
 tournament_players = {}  # Maps channel_name to tournament_id
+
 
 
 # Server-side Pong Game implementation
@@ -558,6 +566,7 @@ class Tournament:
 class PongConsumer(AsyncWebsocketConsumer):
     async def connect(self):
         await self.accept()
+        WEBSOCKET_CONNECTIONS.inc()
         # Add every connecting client to a common lobby group
         await self.channel_layer.group_add("lobby", self.channel_name)
         logger.info(f"WebSocket connected: {self.channel_name}")
@@ -576,6 +585,7 @@ class PongConsumer(AsyncWebsocketConsumer):
         
 
     async def disconnect(self, close_code):
+        WEBSOCKET_CONNECTIONS.dec()
         global waiting_players, active_games, tournament_players, active_tournaments
         logger.info(f"WebSocket disconnecting: {self.channel_name}")
         
@@ -681,10 +691,12 @@ class PongConsumer(AsyncWebsocketConsumer):
         try:
             data = json.loads(text_data)
             msg_type = data.get("type")
+            WEBSOCKET_MESSAGES.labels(message_type=msg_type).inc()
             logger.debug(f"Received message type: {msg_type}")
             
             # Regular game matchmaking
             if msg_type == "join":
+                WAITING_PLAYERS.inc()
                 nickname = data.get("nickname")
                 token = data.get("token")
                 rounds = data.get("rounds")
@@ -857,6 +869,7 @@ class PongConsumer(AsyncWebsocketConsumer):
                         
             # Tournament commands
             elif msg_type == "create_tournament":
+                TOURNAMENT_CREATED.inc()
                 nickname = data.get("nickname")
                 tournament_name = data.get("name", f"{nickname}'s Tournament")
                 rounds = data.get("rounds", 3)
@@ -1198,6 +1211,7 @@ class PongConsumer(AsyncWebsocketConsumer):
     async def start_game(self, event):
         logger.debug(f"Sending start game event: {event.get('message')}")
         
+        
         await self.send(text_data=json.dumps({
             "type": "start_game",
             "message": event.get("message"),
@@ -1206,6 +1220,14 @@ class PongConsumer(AsyncWebsocketConsumer):
             "is_tournament": event.get("is_tournament", False),
             "player_side": event.get("player_side", "left")
         }))
+        
+        game_mode = event.get("game_mode", "classic")
+        GAME_STARTED.labels(mode=game_mode).inc()
+        WAITING_PLAYERS.dec()
+        ACTIVE_PLAYERS.inc()
+        
+        if event.get("room") in self.active_games:
+            self.active_games[event.get("room")].start_time = time.time()
 
     async def game_state_update(self, event):
         logger.debug(f"Sending game state update: {event.get('state')}")
@@ -1220,6 +1242,17 @@ class PongConsumer(AsyncWebsocketConsumer):
             "score": event.get("score"),
             "winner": event.get("winner")
         }))
+        
+        game_mode = event.get("game_mode", "classic")
+        GAME_COMPLETED.labels(mode=game_mode).inc()
+        ACTIVE_PLAYERS.dec()
+        
+        if event.get("room") in self.active_games:
+            game = self.active_games[event.get("room")]
+            if game.start_time:
+                duration = time.time() - game.start_time
+                GAME_DURATION.labels(mode=game_mode).observe(duration)  
+        
 
     async def opponent_left(self, event):
         await self.send(text_data=json.dumps({
@@ -1229,6 +1262,7 @@ class PongConsumer(AsyncWebsocketConsumer):
     
     async def game_sync_loop(self, game_room):
         """Periodically send game state to clients"""
+        
         try:
             while True:
                 # Get game instance

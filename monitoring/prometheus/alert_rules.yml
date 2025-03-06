@@ -1,0 +1,58 @@
+groups:
+- name: DjangoAlerts
+  rules:
+  - alert: HighRequestLatency
+    expr: django_http_requests_latency_seconds > 1
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High request latency on {{ $labels.instance }}"
+      description: "Django request latency is above 1s (current value: {{ $value }}s)"
+
+  - alert: HighDatabaseConnectionUsage
+    expr: django_db_connections_connections_count / django_db_connections_connections_limit > 0.8
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High database connection usage on {{ $labels.instance }}"
+      description: "Django database connection pool is >80% used (current value: {{ $value }})"
+
+  - alert: HighErrorRate
+    expr: rate(django_http_responses_total_by_status_total{status=~"5.."}[5m]) / rate(django_http_responses_total_by_status_total[5m]) > 0.05
+    for: 5m
+    labels:
+      severity: critical
+    annotations:
+      summary: "High error rate on {{ $labels.instance }}"
+      description: "Django error rate is >5% (current value: {{ $value }})"
+
+- name: SystemAlerts
+  rules:
+  - alert: HighCPULoad
+    expr: 100 - (avg by(instance) (irate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 80
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High CPU load on {{ $labels.instance }}"
+      description: "CPU load is above 80% (current value: {{ $value }}%)"
+
+  - alert: HighMemoryUsage
+    expr: (node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes * 100 > 85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "High memory usage on {{ $labels.instance }}"
+      description: "Memory usage is above 85% (current value: {{ $value }}%)"
+
+  - alert: LowDiskSpace
+    expr: (node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes * 100 > 85
+    for: 5m
+    labels:
+      severity: warning
+    annotations:
+      summary: "Low disk space on {{ $labels.instance }}"
+      description: "Disk usage is above 85% (current value: {{ $value }}%)"

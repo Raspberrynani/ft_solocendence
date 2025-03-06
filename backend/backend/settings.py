@@ -46,6 +46,7 @@ INSTALLED_APPS = [
     'corsheaders',
     'api',   # We will create this app next
     'pong',  # And this one for WebSocket game logic
+    'django_prometheus',
 ]
 
 CHANNEL_LAYERS = {
@@ -123,6 +124,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
+    'django_prometheus.middleware.PrometheusBeforeMiddleware',
 ]
 
 ROOT_URLCONF = 'backend.urls'
