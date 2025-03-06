@@ -28,7 +28,8 @@ const App = (function() {
             },
             active: false,
             room: null,
-            isTournament: false
+            isTournament: false,
+            playerSide: 'left'
         },
         
         // UI state
@@ -647,9 +648,10 @@ const App = (function() {
      * @param {number} rounds - Number of rounds for the game
      * @param {boolean} isTournament - Whether this is a tournament game
      * @param {string} gameRoom - Game room identifier from server
+     * @param {string} playerSide - Which side the player is on ('left' or 'right')
      */
-    function handleGameStart(rounds, isTournament = false, gameRoom = null) {
-        console.log(`Game start handler: rounds=${rounds}, isTournament=${isTournament}, room=${gameRoom}`);
+    function handleGameStart(rounds, isTournament = false, gameRoom = null, playerSide = 'left') {
+        console.log(`Game start handler: rounds=${rounds}, isTournament=${isTournament}, room=${gameRoom}, playerSide=${playerSide}`);
         
         // Clear status
         if (elements.pongStatus) {
@@ -689,6 +691,7 @@ const App = (function() {
         
         // Reset game state
         state.game.rounds.current = 0;
+        state.game.playerSide = playerSide;
         
         // Update UI with player info
         if (elements.overlayPlayerName) {
@@ -713,10 +716,50 @@ const App = (function() {
         // Start the game with a slight delay to allow UI to update
         setTimeout(() => {
             console.log('Starting pong game...');
-            startPongGame();
+            
+            // For multiplayer games, use ServerPong; otherwise use regular PongGame
+            if (state.game.isMultiplayer) {
+                console.log('Using ServerPong renderer for multiplayer game');
+                if (window.ServerPong && typeof ServerPong.init === 'function') {
+                    ServerPong.init({
+                        canvasId: 'pong-canvas',
+                        playerSide: playerSide,
+                        nickname: state.user.nickname,
+                        token: state.user.token,
+                        rounds: rounds,
+                        callbacks: {
+                            onRoundComplete: (roundsPlayed) => {
+                                state.game.rounds.current = roundsPlayed;
+                                
+                                if (elements.overlayScore) {
+                                    elements.overlayScore.innerText = roundsPlayed;
+                                }
+                                if (elements.playerRounds) {
+                                    elements.playerRounds.innerText = roundsPlayed;
+                                }
+                                
+                                console.log(`Round completed: ${roundsPlayed}/${state.game.rounds.target}`);
+                            },
+                            onGameStart: () => {
+                                console.log('ServerPong game started');
+                            },
+                            onGameEnd: () => {
+                                console.log('ServerPong game ended');
+                            }
+                        }
+                    });
+                    ServerPong.start();
+                } else {
+                    console.error('ServerPong renderer not available!');
+                    startPongGame(); // Fallback to regular PongGame
+                }
+            } else {
+                // For AI and custom games, use the regular PongGame
+                startPongGame();
+            }
         }, 100);
     }
-    
+        
     /**
      * Handle game updates from opponent
      * @param {Object} data - Game update data
@@ -730,18 +773,34 @@ const App = (function() {
         }
     }
     
-    /**
-     * Handle game over event
-     * @param {number} score - Final score
-     */
-    function handleGameOver(score) {
-        console.log(`handleGameOver called: score=${score}, rounds=${state.game.rounds.current}, target=${state.game.rounds.target}`);
+    function handleGameOver(score, winner) {
+        console.log(`handleGameOver called: score=${score}, winner=${winner}, rounds=${state.game.rounds.current}, target=${state.game.rounds.target}`);
         
-        // Check if this is a valid game over condition
-        const isGameOver = state.game.rounds.current >= state.game.rounds.target || 
-                         score >= state.game.rounds.target / 2;
-        
-        if (isGameOver) {
+        //Deadlock Patch
+            // Force cleanup if winner is undefined but score indicates game should be over
+        const winThreshold = Math.ceil(state.game.rounds.target / 2);
+        if (winner === undefined && score >= winThreshold) {
+            console.log('Winner undefined but score indicates game over - forcing cleanup');
+            state.game.active = false;
+            
+            // Stop the appropriate game engine
+            if (state.game.isMultiplayer && window.ServerPong) {
+                ServerPong.stop();
+            } else if (window.PongGame) {
+                PongGame.stop();
+            }
+            
+            // Exit fullscreen
+            exitFullscreen();
+            
+            // End game and return to menu
+            endPongGame();
+            alert("Game Error Detected, Please retry the round, Game score will not be saved");
+            return;
+        }
+
+        // Game is over if we have a definitive winner
+        if (winner === 'left' || winner === 'right') {
             console.log('Game is over - processing end game logic');
             state.game.active = false; // Game is no longer active
             
@@ -754,8 +813,10 @@ const App = (function() {
                     modules.websocket.sendGameOver(state.game.rounds.current);
                 }
                 
-                // Stop the game 
-                if (window.PongGame) {
+                // Stop the appropriate game engine
+                if (state.game.isMultiplayer && window.ServerPong) {
+                    ServerPong.stop();
+                } else if (window.PongGame) {
                     PongGame.stop();
                 }
                 
@@ -764,7 +825,6 @@ const App = (function() {
                 
                 // Navigate back to game page where tournament UI is
                 setTimeout(() => {
-                    // Show an informative toast
                     showToast('Tournament match completed! Waiting for next match...', 'info');
                     
                     if (modules.ui) {
@@ -773,10 +833,50 @@ const App = (function() {
                 }, 500);
             } else {
                 console.log('Regular game over - ending game');
+                
+                // For multiplayer server-side games, record the result
+                if (state.game.isMultiplayer) {
+                    // Determine if current player won based on playerSide
+                    const playerSide = state.game.playerSide || 'left';
+                    const playerWon = (playerSide === 'left' && winner === 'left') || 
+                                     (playerSide === 'right' && winner === 'right');
+                    
+                    console.log(`Game result: playerSide=${playerSide}, winner=${winner}, playerWon=${playerWon}`);
+                    
+                    // Record game result with a winning score value
+                    const winningScore = Math.ceil(state.game.rounds.target / 2);
+                    recordGameResult(
+                        state.user.nickname,
+                        state.user.token,
+                        playerWon ? winningScore : 0,
+                        state.game.rounds.target
+                    ).then(result => {
+                        // Success messages
+                        showToast('Game ended and result recorded!', 'success');
+                        
+                        // Show appropriate win/loss message
+                        if (playerWon) {
+                            showToast('Congratulations! You won the game!', 'success');
+                        } else {
+                            showToast('Game over. Better luck next time!', 'warning');
+                        }
+                        
+                        // Navigate to leaderboard after a short delay
+                        setTimeout(() => {
+                            if (modules.ui) {
+                                modules.ui.navigateTo('leaderboard-page');
+                            }
+                        }, 1000);
+                    }).catch(error => {
+                        console.error('Error recording game result:', error);
+                        showNetworkError('Failed to record game result!');
+                    });
+                }
+                
                 endPongGame();
             }
         } else {
-            console.log('Not enough rounds for game over - continuing');
+            console.log('No definitive winner yet - continuing game');
         }
     }
     

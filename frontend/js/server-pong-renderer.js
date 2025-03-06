@@ -80,58 +80,166 @@ const ServerPong = (function() {
     }
     
     /**
-     * Setup input handlers for mouse/touch
+     * Setup input handlers for mouse/touch/keyboard
      */
     function setupInputHandlers() {
-        // Mouse movement handler with throttling
+        // Mouse sensitivity factor (higher = more sensitive)
+        const mouseSensitivity = 1.8;
+        
+        // Mouse movement handler with improved sensitivity
         const mouseMoveHandler = Utils.throttle((e) => {
             if (!isRunning) return;
             
             const rect = canvas.getBoundingClientRect();
+            
+            // Store previous mouse position
+            const prevMouseY = mousePosition.y;
+            
+            // Update mouse position
             mousePosition.x = e.clientX - rect.left;
             mousePosition.y = e.clientY - rect.top;
             
-            // Calculate paddle position (middle of paddle at mouse y)
-            const paddleHeight = gameState?.paddles?.[playerSide]?.height || 100;
-            localPaddleY = mousePosition.y - (paddleHeight / 2);
+            // Calculate mouse movement delta and apply sensitivity
+            const deltaY = (mousePosition.y - prevMouseY) * mouseSensitivity;
             
-            // Ensure paddle stays within canvas
-            if (gameState && gameState.dimensions) {
-                localPaddleY = Math.max(0, Math.min(gameState.dimensions.height - paddleHeight, localPaddleY));
+            // If we have game state, use that for paddle position
+            if (gameState && gameState.paddles && gameState.paddles[playerSide]) {
+                // Get current paddle position from game state
+                const paddleHeight = gameState.paddles[playerSide].height;
+                
+                // Apply delta with sensitivity to current paddle position
+                localPaddleY = Math.max(0, 
+                    Math.min(canvas.height - paddleHeight, 
+                        gameState.paddles[playerSide].y + deltaY));
+            } else {
+                // Fallback calculation if we don't have game state
+                const paddleHeight = 100; // Default height
+                localPaddleY = Math.max(0, 
+                    Math.min(canvas.height - paddleHeight, 
+                        localPaddleY + deltaY));
             }
             
             // Send paddle position to server
             updatePaddlePosition(localPaddleY);
-        }, 16); // ~60fps throttling
+        }, 8); // ~120fps throttling for smoother updates
         
-        // Touch handler for mobile
+        // Touch handler for mobile with sensitivity
         const touchMoveHandler = Utils.throttle((e) => {
             if (!isRunning) return;
             e.preventDefault();
             
             const rect = canvas.getBoundingClientRect();
+            
+            // Store previous touch position
+            const prevTouchY = mousePosition.y;
+            
+            // Update touch position
             mousePosition.x = e.touches[0].clientX - rect.left;
             mousePosition.y = e.touches[0].clientY - rect.top;
             
-            // Calculate paddle position (middle of paddle at touch y)
-            const paddleHeight = gameState?.paddles?.[playerSide]?.height || 100;
-            localPaddleY = mousePosition.y - (paddleHeight / 2);
+            // Calculate touch movement delta and apply sensitivity
+            const deltaY = (mousePosition.y - prevTouchY) * mouseSensitivity;
             
-            // Ensure paddle stays within canvas
-            if (gameState && gameState.dimensions) {
-                localPaddleY = Math.max(0, Math.min(gameState.dimensions.height - paddleHeight, localPaddleY));
+            // If we have game state, use that for paddle position
+            if (gameState && gameState.paddles && gameState.paddles[playerSide]) {
+                // Get current paddle position from game state
+                const paddleHeight = gameState.paddles[playerSide].height;
+                
+                // Apply delta with sensitivity to current paddle position
+                localPaddleY = Math.max(0, 
+                    Math.min(canvas.height - paddleHeight, 
+                        gameState.paddles[playerSide].y + deltaY));
+            } else {
+                // Fallback calculation if we don't have game state
+                const paddleHeight = 100; // Default height
+                localPaddleY = Math.max(0, 
+                    Math.min(canvas.height - paddleHeight, 
+                        localPaddleY + deltaY));
             }
             
             // Send paddle position to server
             updatePaddlePosition(localPaddleY);
-        }, 16); // ~60fps throttling
+        }, 8); // ~120fps throttling
         
-        // Add event listeners
+        // Keyboard handler for up/down arrow keys and W/S keys
+        const keyboardSpeed = 15; // Paddle movement speed per keypress
+        let keysPressed = {
+            up: false,
+            down: false
+        };
+        
+        // Handle key down events
+        const keyDownHandler = (e) => {
+            if (!isRunning) return;
+            
+            // Check for arrow keys and W/S keys
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                keysPressed.up = true;
+            } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                keysPressed.down = true;
+            }
+            
+            movePaddleWithKeyboard();
+        };
+        
+        // Handle key up events
+        const keyUpHandler = (e) => {
+            if (!isRunning) return;
+            
+            // Check for arrow keys and W/S keys
+            if (e.key === 'ArrowUp' || e.key === 'w' || e.key === 'W') {
+                keysPressed.up = false;
+            } else if (e.key === 'ArrowDown' || e.key === 's' || e.key === 'S') {
+                keysPressed.down = false;
+            }
+        };
+        
+        // Continuous keyboard movement function
+        function movePaddleWithKeyboard() {
+            if (!isRunning) return;
+            
+            // Skip if no key is pressed
+            if (!keysPressed.up && !keysPressed.down) return;
+            
+            // If we have game state, use that for paddle position
+            if (gameState && gameState.paddles && gameState.paddles[playerSide]) {
+                const paddleHeight = gameState.paddles[playerSide].height;
+                let newPaddleY = gameState.paddles[playerSide].y;
+                
+                // Apply movement based on keys pressed
+                if (keysPressed.up) {
+                    newPaddleY -= keyboardSpeed;
+                }
+                if (keysPressed.down) {
+                    newPaddleY += keyboardSpeed;
+                }
+                
+                // Ensure paddle stays within bounds
+                localPaddleY = Math.max(0, Math.min(canvas.height - paddleHeight, newPaddleY));
+                
+                // Send paddle position to server
+                updatePaddlePosition(localPaddleY);
+            }
+            
+            // Continue movement if keys are still pressed
+            if (keysPressed.up || keysPressed.down) {
+                requestAnimationFrame(movePaddleWithKeyboard);
+            }
+        }
+        
+        // Add all event listeners
         canvas.addEventListener("mousemove", mouseMoveHandler);
         canvas.addEventListener("touchmove", touchMoveHandler, { passive: false });
+        document.addEventListener("keydown", keyDownHandler);
+        document.addEventListener("keyup", keyUpHandler);
         
         // Store reference to remove later
-        inputHandlers = { mouseMoveHandler, touchMoveHandler };
+        inputHandlers = { 
+            mouseMoveHandler, 
+            touchMoveHandler,
+            keyDownHandler,
+            keyUpHandler
+        };
     }
     
     /**
@@ -164,6 +272,8 @@ const ServerPong = (function() {
     /**
      * Start the game renderer
      */
+
+    let connectionCheckInterval = null;
     function start() {
         if (isRunning) {
             console.log("Game already running, ignoring start request");
@@ -179,11 +289,60 @@ const ServerPong = (function() {
         
         // Start render loop
         animationFrameId = requestAnimationFrame(renderLoop);
+
+        //Full screen patch
+        if (canvas) {
+            try {
+              if (document.fullscreenEnabled) {
+                canvas.requestFullscreen().catch(err => {
+                  console.warn("Fullscreen request failed:", err);
+                });
+              } else if (canvas.webkitRequestFullscreen) {
+                canvas.webkitRequestFullscreen();
+              } else if (canvas.mozRequestFullScreen) {
+                canvas.mozRequestFullScreen();
+              } else if (canvas.msRequestFullscreen) {
+                canvas.msRequestFullscreen();
+              }
+            } catch (err) {
+              console.warn("Error attempting to enter fullscreen:", err);
+            }
+        }
         
         // Trigger callback if provided
         if (eventCallbacks.onGameStart) {
             eventCallbacks.onGameStart();
         }
+
+        connectionCheckInterval = setInterval(() => {
+            // Check if we're still receiving game updates
+            const now = Date.now();
+            const lastUpdateTime = gameState ? gameState.lastUpdateTime : 0;
+            
+            // If we haven't received an update in 3 seconds, something's wrong
+            if (now - lastUpdateTime > 3000 && isRunning) {
+                console.log("No game updates received for 3 seconds - possible connection issue");
+                
+                // Try to force a reconnection
+                if (window.WebSocketManager && WebSocketManager.reconnect) {
+                    WebSocketManager.reconnect();
+                }
+                
+                // As a last resort, force game cleanup
+                stop();
+                
+                // Show an error message to the user
+                if (window.Utils && Utils.showToast) {
+                    Utils.showToast("Connection to game server lost. Returning to menu.", "error");
+                }
+                
+                // Navigate back to menu
+                if (window.modules && modules.ui) {
+                    modules.ui.navigateTo('game-page');
+                }
+            }
+        }, 3000);
+    
     }
     
     /**
@@ -202,11 +361,18 @@ const ServerPong = (function() {
         if (inputHandlers) {
             canvas.removeEventListener("mousemove", inputHandlers.mouseMoveHandler);
             canvas.removeEventListener("touchmove", inputHandlers.touchMoveHandler);
+            document.removeEventListener("keydown", inputHandlers.keyDownHandler);
+            document.removeEventListener("keyup", inputHandlers.keyUpHandler);
         }
         
         // Call onGameEnd callback if provided
         if (eventCallbacks.onGameEnd) {
             eventCallbacks.onGameEnd();
+        }
+
+        if (connectionCheckInterval) {
+            clearInterval(connectionCheckInterval);
+            connectionCheckInterval = null;
         }
     }
     
@@ -216,10 +382,12 @@ const ServerPong = (function() {
      */
     function updateGameState(state) {
         if (!state) return;
+        state.lastUpdateTime = Date.now();
         
         // Store previous state for interpolation if needed
         const previousState = gameState;
-        
+
+        console.log("Received game state update:", state);
         // Update game state
         gameState = state;
         
@@ -233,11 +401,14 @@ const ServerPong = (function() {
         }
         
         // Update score if needed
-        if (state.score && (state.score.left !== config.currentRounds || state.score.right !== config.currentRounds)) {
-            const totalRounds = state.score.left + state.score.right;
-            config.currentRounds = totalRounds;
+        if (previousState && state.score && 
+            (previousState.score.left !== state.score.left || 
+             previousState.score.right !== state.score.right)) {
             
-            // Notify about round completion
+            // Calculate total rounds played
+            const totalRounds = state.score.left + state.score.right;
+            
+            // Trigger round complete callback
             if (eventCallbacks.onRoundComplete) {
                 eventCallbacks.onRoundComplete(totalRounds);
             }

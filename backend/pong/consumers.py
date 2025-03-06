@@ -1208,11 +1208,11 @@ class PongConsumer(AsyncWebsocketConsumer):
         }))
 
     async def game_state_update(self, event):
-        """Send game state update to client"""
+        logger.debug(f"Sending game state update: {event.get('state')}")
         await self.send(text_data=json.dumps({
-            "type": "game_state_update",
-            "state": event.get("state")
-        }))
+        "type": "game_state_update",
+        "state": event.get("state")
+         }))
 
     async def broadcast_game_over(self, event):
         await self.send(text_data=json.dumps({
@@ -1240,16 +1240,17 @@ class PongConsumer(AsyncWebsocketConsumer):
                         # Determine scores to send
                         if game.winner == "left":
                             winner_score = game.left_score
+                            winner="left"
                         else:
                             winner_score = game.right_score
-                        
+                            winner="right"
                         # Send game over notification
                         await self.channel_layer.group_send(
                             game_room,
                             {
                                 "type": "broadcast_game_over",
                                 "score": winner_score,
-                                "winner": game.winner
+                                "winner": winner
                             }
                         )
                     break
@@ -1294,7 +1295,8 @@ class PongConsumer(AsyncWebsocketConsumer):
     async def broadcast_game_over(self, event):
         await self.send(text_data=json.dumps({
             "type": "game_over",
-            "score": event.get("score")
+            "score": event.get("score"),
+            "winner": event.get("winner")
         }))
 
     async def opponent_left(self, event):

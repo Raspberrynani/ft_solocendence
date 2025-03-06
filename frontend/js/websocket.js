@@ -17,7 +17,7 @@ const WebSocketManager = (function() {
   // Constants
   const MAX_RECONNECT_ATTEMPTS = 5;
   const RECONNECT_DELAY = 3000; // 3 seconds
-  const PADDLE_UPDATE_THROTTLE = 33; // ~30fps max for paddle updates
+  const PADDLE_UPDATE_THROTTLE = 16; // ~30fps max for paddle updates
   
   // WebSocket URL based on current location
   const WS_URL = (() => {
@@ -186,6 +186,17 @@ const WebSocketManager = (function() {
    * @param {Object} data - Parsed message data
    */
   function processMessage(data) {
+    // Special case for game_over to ensure winner is preserved
+    if (data.type === 'game_over') {
+        console.log("Processing game_over message:", data);
+        
+        if (gameCallbacks.onGameOver) {
+            // Explicitly pass score and winner
+            gameCallbacks.onGameOver(data.score, data.winner);
+        }
+        return;
+    }
+
     // Add enhanced debugging for tournament messages
     if (data.type.includes('tournament') || data.type === 'start_game') {
       console.log("WebSocket [TOURNAMENT DEBUG]:", data);
@@ -247,9 +258,11 @@ const WebSocketManager = (function() {
         }
       },
       
+      // Keep this as a fallback, but our special case above should handle it first
       game_over: () => {
+        console.log("Received game over event from handler");
         if (gameCallbacks.onGameOver) {
-          gameCallbacks.onGameOver(data.score);
+          gameCallbacks.onGameOver(data.score, data.winner);
         }
       },
       
@@ -364,14 +377,14 @@ const WebSocketManager = (function() {
     
     // Add extra validation to ensure we're sending valid data
     if (typeof paddleY !== 'number' || isNaN(paddleY)) {
-      console.warn("Invalid paddle Y position:", paddleY);
-      return false;
+        console.warn("Invalid paddle Y position:", paddleY);
+        return false;
     }
     
     // Throttle paddle updates to reduce network traffic
     const now = Date.now();
     if (now - lastPaddleUpdate < PADDLE_UPDATE_THROTTLE) {
-      return true; // Pretend success but skip sending
+        return true; // Pretend success but skip sending
     }
     
     lastPaddleUpdate = now;
@@ -380,8 +393,8 @@ const WebSocketManager = (function() {
     const roundedY = Math.round(paddleY);
     
     return send({
-      type: "game_update",
-      data: { paddleY: roundedY }
+        type: "game_update",
+        data: { paddleY: roundedY }
     });
   }
   
