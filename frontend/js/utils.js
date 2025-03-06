@@ -223,10 +223,6 @@ const Utils = (function() {
       return validNickname.test(nickname);
     }
     
-    /**
-     * Detect browser type and version
-     * @returns {Object} - Browser information
-     */
     function detectBrowser() {
       const userAgent = navigator.userAgent;
       let browserName = "Unknown";
