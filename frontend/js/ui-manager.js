@@ -164,15 +164,15 @@ const UIManager = (function() {
      */
     function getPageTitle(pageId) {
       const titles = {
-        'language-page': 'Pong.io - Language Selection',
-        'game-page': 'Pong.io - Menu',
-        'pong-page': 'Pong.io - Game',
-        'leaderboard-page': 'Pong.io - Leaderboard',
-        'custom-game-page': 'Pong.io - Custom Game',
-        'privacy-policy-page': 'Pong.io - Privacy Policy'
+        'language-page': 'Solocendence - Language Selection',
+        'game-page': 'Solocendence - Menu',
+        'pong-page': 'Solocendence - Game',
+        'leaderboard-page': 'Solocendence - Leaderboard',
+        'custom-game-page': 'Solocendence - Custom Game',
+        'privacy-policy-page': 'Solocendence - Privacy Policy'
       };
       
-      return titles[pageId] || 'Pong.io';
+      return titles[pageId] || 'Solocendence';
     }
     
     /**

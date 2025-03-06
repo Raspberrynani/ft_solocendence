@@ -237,7 +237,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
     
     // Add helpful console message for discovering the easter eggs
-    console.log("%c🎮 Pong.io Easter Eggs Guide 🎮", "color: #00d4ff; font-size: 16px; font-weight: bold;");
+    console.log("%c🎮 Solocendence Easter Eggs Guide 🎮", "color: #00d4ff; font-size: 16px; font-weight: bold;");
     console.log("%c- Press 'Z' for ambient mode", "color: #87CEEB; font-size: 14px;");
     console.log("%c- Try typing '42'", "color: #87CEEB; font-size: 14px;");
     console.log("%c- Feeling anxious? Type 'panic'", "color: #87CEEB; font-size: 14px;");
