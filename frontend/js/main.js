@@ -1541,24 +1541,25 @@ const App = (function() {
      */
     async function recordGameResult(nickname, token, score, totalRounds) {
         try {
-            // Use ApiService if available
-            if (modules.api && modules.api.post) {
-                return await modules.api.post('end_game/', {
-                    nickname,
-                    token,
-                    score,
-                    totalRounds
-                });
-            }
+            // Get CSRF token first
+            const csrfResponse = await fetch(`${getApiBaseUrl()}/csrf/`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+            const csrfData = await csrfResponse.json();
+            const csrfToken = csrfData.csrfToken;
             
-            // Fallback to direct fetch
+            console.log("Got CSRF token:", csrfToken);
+            
+            // Now make the end_game request with the fresh token
             const apiUrl = getApiBaseUrl();
             const response = await fetch(`${apiUrl}/end_game/`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': getCsrfToken()
+                    'X-CSRFToken': csrfToken
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     nickname,
                     token,
