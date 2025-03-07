@@ -244,6 +244,28 @@ const WebSocketManager = (function() {
       waiting_list: () => {
         waitingListCallbacks.forEach(callback => callback(data.waiting_list));
       },
+
+      player_ready_success: () => {
+        console.log("Ready status confirmed by server");
+        
+        // If Tournament Manager has methods to update UI, call them
+        if (window.TournamentManager) {
+          // Hide the ready section as the server has acknowledged readiness
+          if (typeof TournamentManager.showReadySection === 'function') {
+            TournamentManager.showReadySection(false);
+          }
+          
+          // Show status notification
+          if (typeof TournamentManager.showTournamentStatus === 'function') {
+            TournamentManager.showTournamentStatus("You are ready! Waiting for other players...", "success");
+          }
+        }
+        
+        // Show a toast if Utils is available
+        if (typeof Utils !== 'undefined' && Utils.showToast) {
+          Utils.showToast(data.message || "Ready status confirmed", "success");
+        }
+      },
       
       game_update: () => {
         if (gameCallbacks.onGameUpdate && data.data) {
