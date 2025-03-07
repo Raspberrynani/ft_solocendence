@@ -3,10 +3,7 @@
  * Prevents users from accidentally leaving tournaments
  */
 (function() {
-    // Run this code immediately, don't wait for DOMContentLoaded
-    console.log("Tournament protection initializing...");
-    
-    // Store state to survive page refreshes
+    // Initialize state
     let inTournament = false;
     
     // Try to load from localStorage
@@ -16,138 +13,13 @@
         console.warn("Could not access localStorage");
     }
     
-    // ----- HISTORY CONTROL -----
-    
     // Create a history entry stack to prevent back navigation
-    let pageStack = ['tournament'];
-    
-    // Push initial state to set up history control
     history.pushState({page: 'tournament'}, "Tournament", window.location.pathname);
     
-    // When back/forward buttons are clicked
-    window.addEventListener('popstate', function(event) {
-        console.log("Navigation detected");
-        
-        // Check if we're in tournament mode
-        checkTournamentStatus();
-        
-        if (inTournament) {
-            // Show warning
-            const wantToLeave = confirm("WARNING: Going back will remove you from the tournament. Are you sure?");
-            
-            if (wantToLeave) {
-                // User confirmed - allow leaving but exit tournament
-                leaveTournament();
-                return true;
-            } else {
-                // User cancelled - prevent back navigation by pushing a new state
-                console.log("Navigation cancelled - staying in tournament");
-                history.pushState({page: 'tournament'}, "Tournament", window.location.pathname);
-                return false;
-            }
-        }
-    });
-    
-    // ----- REFRESH PROTECTION -----
-    
-    // Stop page refresh
-    window.addEventListener('beforeunload', function(event) {
-        // Check tournament status
-        checkTournamentStatus();
-        
-        if (inTournament) {
-            // Standard way of showing a confirmation dialog
-            const message = "WARNING: Refreshing will disconnect you from the tournament!";
-            event.preventDefault(); // Cancel the event
-            event.returnValue = message; // Chrome requires returnValue to be set
-            return message; // For older browsers
-        }
-    });
-    
-    // ----- CLICK INTERCEPTION -----
-    
-    // Global click handler
-    document.addEventListener('click', function(event) {
-        // Check tournament status
-        checkTournamentStatus();
-        
-        if (!inTournament) return; // Only intercept if in tournament
-        
-        // Find any navigation elements that were clicked
-        let target = event.target;
-        while (target && target !== document) {
-            // Check for data-navigate attribute (your navigation system)
-            if (target.hasAttribute('data-navigate')) {
-                const targetPage = target.getAttribute('data-navigate');
-                
-                // Don't block navigation to pong page
-                if (targetPage === 'pong-page') return;
-                
-                // Block other navigation while in tournament
-                event.preventDefault();
-                event.stopPropagation();
-                
-                const wantToLeave = confirm("WARNING: Navigating away will remove you from the tournament. Continue?");
-                
-                if (wantToLeave) {
-                    // User confirmed - leave tournament then navigate
-                    leaveTournament();
-                    
-                    // Delayed navigation to ensure tournament is left first
-                    setTimeout(function() {
-                        if (window.UIManager && typeof UIManager.navigateTo === 'function') {
-                            UIManager.navigateTo(targetPage);
-                        }
-                    }, 100);
-                }
-                
-                return false;
-            }
-            
-            // Check for links
-            if (target.tagName === 'A' && target.href) {
-                // Block all link navigation while in tournament
-                event.preventDefault();
-                event.stopPropagation();
-                
-                const wantToLeave = confirm("WARNING: Navigating away will remove you from the tournament. Continue?");
-                
-                if (wantToLeave) {
-                    // User confirmed - leave tournament then navigate
-                    leaveTournament();
-                    
-                    // Navigate after leaving tournament
-                    setTimeout(function() {
-                        window.location.href = target.href;
-                    }, 100);
-                }
-                
-                return false;
-            }
-            
-            target = target.parentElement;
-        }
-    }, true); // Use capture phase to intercept events before they reach targets
-    
-    // ----- KEYBOARD INTERCEPTION -----
-    
-    // Block refresh shortcuts (F5, Ctrl+R)
-    document.addEventListener('keydown', function(event) {
-        checkTournamentStatus();
-        
-        if (!inTournament) return; // Only intercept if in tournament
-        
-        // F5 key or Ctrl+R
-        if (event.key === 'F5' || (event.ctrlKey && event.key === 'r')) {
-            event.preventDefault();
-            alert("⚠️ Page refresh is disabled while in tournament mode to prevent disconnection.");
-            return false;
-        }
-    }, true);
-    
-    // ----- TOURNAMENT STATE MANAGEMENT -----
-    
-    // Check if user is in a tournament
+    /**
+     * Check tournament status and update state
+     * @returns {boolean} - Current tournament status
+     */
     function checkTournamentStatus() {
         // First try from localStorage for persistence across refreshes
         try {
@@ -165,7 +37,7 @@
             
             // Update localStorage
             try {
-                localStorage.setItem('inTournament', inTournament);
+                localStorage.setItem('inTournament', inTournament.toString());
             } catch (e) {
                 console.warn("Could not store in localStorage", e);
             }
@@ -174,16 +46,19 @@
         return inTournament;
     }
     
-    // Helper function to leave tournament
+    /**
+     * Leave tournament safely
+     * @returns {boolean} - Success status
+     */
     function leaveTournament() {
-        console.log("Leaving tournament...");
+        console.log("Safely leaving tournament...");
         
-        // Try to call actual TournamentManager function
+        // Call TournamentManager function if available
         if (window.TournamentManager && typeof TournamentManager.leaveTournament === 'function') {
             TournamentManager.leaveTournament();
         }
         
-        // Update our state
+        // Update local state
         inTournament = false;
         
         // Update localStorage
@@ -196,18 +71,9 @@
         return true;
     }
     
-    // ----- UI ELEMENTS -----
-    
-    // We'll add UI elements after the DOM is ready
-    window.addEventListener('DOMContentLoaded', function() {
-        // Create warning elements
-        createWarningElements();
-        
-        // Hook into TournamentManager
-        hookTournamentManager();
-    });
-    
-    // Create warning elements
+    /**
+     * Create and display tournament warning UI elements
+     */
     function createWarningElements() {
         // Create warning banner
         const banner = document.createElement('div');
@@ -231,59 +97,65 @@
         document.body.appendChild(banner);
         
         // Create warning message for tournament page
-        const warningElement = document.createElement('div');
-        warningElement.id = 'tournament-leave-warning';
-        warningElement.className = 'exit-warning mt-3';
-        warningElement.innerHTML = '<i class="fa fa-exclamation-triangle" aria-hidden="true"></i> ' +
-            'WARNING: Leaving this page will remove you from the current tournament!';
-        warningElement.style.cssText = `
-            animation: warningPulse 2s infinite;
-            background-color: rgba(220, 53, 69, 0.1);
-            border: 1px solid rgba(220, 53, 69, 0.3);
-            border-radius: 5px;
-            padding: 10px;
-            margin-bottom: 15px;
-            color: #ff6b6b;
-            font-weight: bold;
-            text-align: center;
-            display: none;
-        `;
-        
-        // Add animation style
-        const style = document.createElement('style');
-        style.textContent = `
-            @keyframes warningPulse {
-                0%, 100% { 
-                    background-color: rgba(220, 53, 69, 0.1);
-                    border-color: rgba(220, 53, 69, 0.3);
-                }
-                50% { 
-                    background-color: rgba(220, 53, 69, 0.2);
-                    border-color: rgba(220, 53, 69, 0.5);
-                }
-            }
-        `;
-        document.head.appendChild(style);
-        
-        // Insert warning element before back button
-        const backButton = document.getElementById('tournament-back-button');
-        if (backButton && backButton.parentNode) {
-            backButton.parentNode.insertBefore(warningElement, backButton);
-        } else {
-            // Fallback - add to tournament page if it exists
+        const warningElement = document.getElementById('tournament-leave-warning');
+        if (!warningElement) {
+            const newWarningElement = document.createElement('div');
+            newWarningElement.id = 'tournament-leave-warning';
+            newWarningElement.className = 'exit-warning mt-3';
+            newWarningElement.innerHTML = '<i class="fa fa-exclamation-triangle" aria-hidden="true"></i> ' +
+                'WARNING: Leaving this page will remove you from the current tournament!';
+            newWarningElement.style.cssText = `
+                animation: warningPulse 2s infinite;
+                background-color: rgba(220, 53, 69, 0.1);
+                border: 1px solid rgba(220, 53, 69, 0.3);
+                border-radius: 5px;
+                padding: 10px;
+                margin-bottom: 15px;
+                color: #ff6b6b;
+                font-weight: bold;
+                text-align: center;
+                display: none;
+            `;
+            
+            // Add to tournament page if it exists
             const tournamentPage = document.getElementById('tournament-page');
             if (tournamentPage) {
-                tournamentPage.appendChild(warningElement);
+                // Find appropriate insertion point - before back button
+                const backButton = document.getElementById('tournament-back-button');
+                if (backButton && backButton.parentNode) {
+                    backButton.parentNode.insertBefore(newWarningElement, backButton);
+                } else {
+                    // Fallback - add to end of tournament page
+                    tournamentPage.appendChild(newWarningElement);
+                }
             }
         }
         
-        // Update UI based on current state
-        updateWarningUI();
+        // Add animation style if not present
+        if (!document.getElementById('tournament-warning-styles')) {
+            const style = document.createElement('style');
+            style.id = 'tournament-warning-styles';
+            style.textContent = `
+                @keyframes warningPulse {
+                    0%, 100% { 
+                        background-color: rgba(220, 53, 69, 0.1);
+                        border-color: rgba(220, 53, 69, 0.3);
+                    }
+                    50% { 
+                        background-color: rgba(220, 53, 69, 0.2);
+                        border-color: rgba(220, 53, 69, 0.5);
+                    }
+                }
+            `;
+            document.head.appendChild(style);
+        }
     }
     
-    // Update the UI based on tournament state
+    /**
+     * Update warning UI based on tournament state
+     */
     function updateWarningUI() {
-        // Get the current state
+        // Get current tournament state
         const isInTournament = checkTournamentStatus();
         
         // Update banner
@@ -299,78 +171,209 @@
         }
     }
     
-    // Hook into TournamentManager to update UI automatically
-    function hookTournamentManager() {
-        // Wait for TournamentManager to be loaded
-        const checkInterval = setInterval(function() {
-            if (!window.TournamentManager) return;
+    /**
+     * Handle browser back/forward navigation
+     */
+    function handlePopState(event) {
+        // Check if in a tournament
+        if (checkTournamentStatus()) {
+            // Show confirmation dialog
+            const confirmLeave = confirm("WARNING: Going back will remove you from the tournament. Are you sure?");
             
-            clearInterval(checkInterval);
-            console.log("Tournament manager found - hooking functions");
-            
-            // Store original functions if they exist
-            const originalJoined = TournamentManager.handleTournamentJoined;
-            const originalUpdate = TournamentManager.handleTournamentUpdate;
-            const originalLeft = TournamentManager.handleTournamentLeft;
-            
-            // Override joined handler
-            if (typeof originalJoined === 'function') {
-                TournamentManager.handleTournamentJoined = function(tournament) {
-                    // Call original function
-                    originalJoined.call(TournamentManager, tournament);
-                    
-                    // Update our state
-                    inTournament = true;
-                    try {
-                        localStorage.setItem('inTournament', 'true');
-                    } catch (e) {}
-                    
-                    // Update UI
-                    updateWarningUI();
-                };
+            if (confirmLeave) {
+                // User confirmed - leave tournament and allow navigation
+                leaveTournament();
+                return true;
+            } else {
+                // User canceled - prevent back navigation
+                history.pushState({page: 'tournament'}, "Tournament", window.location.pathname);
+                return false;
             }
-            
-            // Override update handler
-            if (typeof originalUpdate === 'function') {
-                TournamentManager.handleTournamentUpdate = function(tournament) {
-                    // Call original function
-                    originalUpdate.call(TournamentManager, tournament);
-                    
-                    // Update our state
-                    inTournament = true;
-                    try {
-                        localStorage.setItem('inTournament', 'true');
-                    } catch (e) {}
-                    
-                    // Update UI
-                    updateWarningUI();
-                };
-            }
-            
-            // Override left handler
-            if (typeof originalLeft === 'function') {
-                TournamentManager.handleTournamentLeft = function() {
-                    // Call original function
-                    originalLeft.call(TournamentManager);
-                    
-                    // Update our state
-                    inTournament = false;
-                    try {
-                        localStorage.setItem('inTournament', 'false');
-                    } catch (e) {}
-                    
-                    // Update UI
-                    updateWarningUI();
-                };
-            }
-            
-            // Initial UI update
-            updateWarningUI();
-        }, 100);
+        }
     }
     
-    // Check tournament status periodically to keep UI in sync
-    setInterval(function() {
+    /**
+     * Handle page refresh
+     */
+    function handleBeforeUnload(event) {
+        // Check if in a tournament
+        if (checkTournamentStatus()) {
+            // Standard browser warning
+            const message = "WARNING: Refreshing will disconnect you from the tournament!";
+            event.preventDefault();
+            event.returnValue = message;
+            return message;
+        }
+    }
+    
+    /**
+     * Handle clicks on navigation elements
+     */
+    function handleNavigationClick(event) {
+        // Skip if not in a tournament
+        if (!checkTournamentStatus()) return;
+        
+        // Find clicked navigation element
+        let target = event.target;
+        while (target && target !== document) {
+            // Check for data-navigate attribute
+            if (target.hasAttribute('data-navigate')) {
+                const targetPage = target.getAttribute('data-navigate');
+                
+                // Don't block navigation to pong page
+                if (targetPage === 'pong-page') return;
+                
+                // Block other navigation
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // Confirm navigation
+                const confirmLeave = confirm("WARNING: Navigating away will remove you from the tournament. Continue?");
+                
+                if (confirmLeave) {
+                    // Leave tournament and navigate
+                    leaveTournament();
+                    
+                    // Wait for tournament exit to complete
+                    setTimeout(function() {
+                        if (window.UIManager && typeof UIManager.navigateTo === 'function') {
+                            UIManager.navigateTo(targetPage);
+                        }
+                    }, 100);
+                }
+                
+                return false;
+            }
+            
+            // Check for links
+            if (target.tagName === 'A' && target.href) {
+                // Block link navigation
+                event.preventDefault();
+                event.stopPropagation();
+                
+                // Confirm navigation
+                const confirmLeave = confirm("WARNING: Navigating away will remove you from the tournament. Continue?");
+                
+                if (confirmLeave) {
+                    // Leave tournament and navigate
+                    leaveTournament();
+                    
+                    // Navigate after leaving tournament
+                    setTimeout(function() {
+                        window.location.href = target.href;
+                    }, 100);
+                }
+                
+                return false;
+            }
+            
+            target = target.parentElement;
+        }
+    }
+    
+    /**
+     * Block refresh keyboard shortcuts
+     */
+    function handleKeyDown(event) {
+        // Skip if not in a tournament
+        if (!checkTournamentStatus()) return;
+        
+        // Block F5 or Ctrl+R
+        if (event.key === 'F5' || (event.ctrlKey && event.key === 'r')) {
+            event.preventDefault();
+            alert("⚠️ Page refresh is disabled while in tournament mode to prevent disconnection.");
+            return false;
+        }
+    }
+    
+    /**
+     * Hook into Tournament Manager
+     */
+    function hookTournamentManager() {
+        if (!window.TournamentManager) return;
+        
+        console.log("Tournament manager found - hooking functions");
+        
+        // Store original functions
+        const originalJoined = TournamentManager.handleTournamentJoined;
+        const originalUpdate = TournamentManager.handleTournamentUpdate;
+        const originalLeft = TournamentManager.handleTournamentLeft;
+        
+        // Override joined handler
+        if (typeof originalJoined === 'function') {
+            TournamentManager.handleTournamentJoined = function(tournament) {
+                // Call original function
+                originalJoined.call(TournamentManager, tournament);
+                
+                // Update state
+                inTournament = true;
+                try {
+                    localStorage.setItem('inTournament', 'true');
+                } catch (e) {}
+                
+                // Update UI
+                updateWarningUI();
+            };
+        }
+        
+        // Override update handler
+        if (typeof originalUpdate === 'function') {
+            TournamentManager.handleTournamentUpdate = function(tournament) {
+                // Call original function
+                originalUpdate.call(TournamentManager, tournament);
+                
+                // Update state
+                inTournament = true;
+                try {
+                    localStorage.setItem('inTournament', 'true');
+                } catch (e) {}
+                
+                // Update UI
+                updateWarningUI();
+            };
+        }
+        
+        // Override left handler
+        if (typeof originalLeft === 'function') {
+            TournamentManager.handleTournamentLeft = function() {
+                // Call original function
+                originalLeft.call(TournamentManager);
+                
+                // Update state
+                inTournament = false;
+                try {
+                    localStorage.setItem('inTournament', 'false');
+                } catch (e) {}
+                
+                // Update UI
+                updateWarningUI();
+            };
+        }
+    }
+    
+    // Set up event listeners
+    window.addEventListener('popstate', handlePopState);
+    window.addEventListener('beforeunload', handleBeforeUnload);
+    document.addEventListener('click', handleNavigationClick, true);
+    document.addEventListener('keydown', handleKeyDown, true);
+    
+    // Initialize when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        // Create warning elements
+        createWarningElements();
+        
+        // Hook into TournamentManager (with retry)
+        const hookInterval = setInterval(function() {
+            if (window.TournamentManager) {
+                hookTournamentManager();
+                clearInterval(hookInterval);
+            }
+        }, 200);
+        
+        // Initial UI update
         updateWarningUI();
-    }, 2000);
+    });
+    
+    // Periodically check tournament status to keep UI in sync
+    setInterval(updateWarningUI, 2000);
 })();
