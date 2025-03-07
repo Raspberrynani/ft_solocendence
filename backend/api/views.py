@@ -96,6 +96,8 @@ def get_entries(request):
     return JsonResponse({"entries": data})
 
 
+@csrf_protect
+@require_http_methods(["POST"])
 def end_game(request):
     """
     Record a game for a player

@@ -1540,44 +1540,44 @@ const App = (function() {
      * @returns {Promise<Object>} - Server response
      */
     async function recordGameResult(nickname, token, score, totalRounds) {
-        try {
-            // Get CSRF token first
-            const csrfResponse = await fetch(`${getApiBaseUrl()}/csrf/`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-            const csrfData = await csrfResponse.json();
-            const csrfToken = csrfData.csrfToken;
-            
-            console.log("Got CSRF token:", csrfToken);
-            
-            // Now make the end_game request with the fresh token
-            const apiUrl = getApiBaseUrl();
-            const response = await fetch(`${apiUrl}/end_game/`, {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'X-CSRFToken': csrfToken
-                },
-                credentials: 'include',
-                body: JSON.stringify({
-                    nickname,
-                    token,
-                    score,
-                    totalRounds
-                })
-            });
-            
-            if (!response.ok) {
-                throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
-            }
-            
-            return await response.json();
-        } catch (error) {
-            console.error('Error recording game result:', error);
-            throw error;
+    try {
+        // Get CSRF token first
+        const csrfResponse = await fetch(`${getApiBaseUrl()}/csrf/`, {
+            method: 'GET',
+            credentials: 'include'
+        });
+        const csrfData = await csrfResponse.json();
+        const csrfToken = csrfData.csrfToken;
+        
+        console.log("Got CSRF token:", csrfToken);
+        
+        // Now make the end_game request with the fresh token
+        const apiUrl = getApiBaseUrl();
+        const response = await fetch(`${apiUrl}/end_game/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrfToken
+            },
+            credentials: 'include',
+            body: JSON.stringify({
+                nickname,
+                token,
+                score,
+                totalRounds
+            })
+        });
+        
+        if (!response.ok) {
+            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
         }
+        
+        return await response.json();
+    } catch (error) {
+        console.error('Error recording game result:', error);
+        throw error;
     }
+}
     
     /**
      * Update the leaderboard with latest player data
