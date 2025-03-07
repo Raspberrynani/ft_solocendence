@@ -4,40 +4,44 @@ services:
     image: postgres
     restart: always
     environment:
-      POSTGRES_DB: pongdb
-      POSTGRES_USER: ponguser
-      POSTGRES_PASSWORD: WillowRapids
+      POSTGRES_DB: ${POSTGRES_DB:-pongdb}
+      POSTGRES_USER: ${POSTGRES_USER:-ponguser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-WillowRapids}
     ports:
       - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ponguser -d pongdb"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ponguser} -d ${POSTGRES_DB:-pongdb}"]
       interval: 5s
       timeout: 5s
       retries: 5
+    networks:
+      - pong-network
 
   backend:
-    build: ./backend
+    build: 
+      context: ./backend
+      dockerfile: Dockerfile
     restart: always
     depends_on:
       db:
         condition: service_healthy
     ports:
       - "8000:8000"  # HTTP
-      - "8443:8443"  # HTTPS
+      - "8443:8443"  # HTTPS/WebSocket
     volumes:
-      - ./certs:/app/certs:ro
+      - ./certs:/etc/certs:ro
       - ./backend:/app
     environment:
-      - SSL_ENABLED=true  # Set to true when certificates are ready
-      - SSL_CERT_FILE=./certs/cert.pem
-      - SSL_KEY_FILE=./certs/key.pem
+      - SSL_ENABLED=true
       - DB_HOST=db
       - DB_PORT=5432
-      - POSTGRES_DB=pongdb
-      - POSTGRES_USER=ponguser
-      - POSTGRES_PASSWORD=WillowRapids
+      - POSTGRES_DB=${POSTGRES_DB:-pongdb}
+      - POSTGRES_USER=${POSTGRES_USER:-ponguser}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-WillowRapids}
+    networks:
+      - pong-network
 
   frontend:
     image: nginx
@@ -50,6 +54,12 @@ services:
       - "8444:443"  # HTTPS
     depends_on:
       - backend
+    networks:
+      - pong-network
+
+networks:
+  pong-network:
+    driver: bridge
 
 volumes:
   postgres_data:

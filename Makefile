@@ -1,76 +1,50 @@
-# Makefile for managing Docker-based Pong application with monitoring
+# Makefile for Solocendence Pong
 
-# Define Docker Compose files
-DOCKER_COMPOSE = docker-compose
-DOCKER_COMPOSE_FILE = docker-compose.yml
-DOCKER_COMPOSE_MONITORING = docker-compose.monitoring.yml
-DOCKER_COMPOSE_CMD = $(DOCKER_COMPOSE) -f $(DOCKER_COMPOSE_FILE) -f $(DOCKER_COMPOSE_MONITORING)
+# Variables
+COMPOSE = docker-compose
+PROJECT_NAME = solocendence
 
-# SSL certificate script
-SSL_SCRIPT = ./gen_ssl.sh
+# Targets
+.PHONY: all build stop clean re gen-ssl migrate help
 
-# Set default goal
-.DEFAULT_GOAL := run
+all: gen-ssl build ## Generate SSL certificates and build all containers
 
-# Help message
-help:
-	@echo "Available commands:"
-	@echo "  make          - Start all containers (if already built)"
-	@echo "  make all      - Build and start all containers"
-	@echo "  make build    - Build all containers without starting"
-	@echo "  make clean    - Stop and remove all containers, keeping volumes and images"
-	@echo "  make fclean   - Stop and remove all containers, volumes, and images"
-	@echo "  make re       - Rebuild and restart all containers (fclean + all)"
-	@echo "  make ps       - Show running containers"
-	@echo "  make logs     - Show logs from all containers"
-	@echo "  make ssl      - Generate SSL certificates"
-	@echo "  make help     - Show this help message"
+build: ## Build and start all containers
+	$(COMPOSE) up --build -d
 
-# Generate SSL certificates
-ssl:
-	@echo "Generating SSL certificates..."
-	@if [ -f $(SSL_SCRIPT) ]; then \
-		chmod +x $(SSL_SCRIPT); \
-		$(SSL_SCRIPT); \
-	else \
-		echo "Error: SSL script $(SSL_SCRIPT) not found"; \
-		exit 1; \
-	fi
-	@echo "SSL certificates generated successfully"
+stop: ## Stop all running containers
+	$(COMPOSE) down
 
-# Run services (if already built)
-run: ssl
-	$(DOCKER_COMPOSE_CMD) up -d
+clean: ## Remove all containers, images, and volumes
+	$(COMPOSE) down --rmi all --volumes --remove-orphans
 
-# Build and run services
-all: build ssl run
+re: stop clean all ## Restart everything: stop, clean, and rebuild
 
-# Build services without starting
-build:
-	$(DOCKER_COMPOSE_CMD) build
+gen-ssl: ## Generate self-signed SSL certificates
+	mkdir -p ./certs
+	mkdir -p ./backend/certs
+	openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
+		-keyout ./certs/key.pem \
+		-out ./certs/cert.pem \
+		-subj "/C=MY/ST=Selangor/L=Unspecified/O=Solocendence/OU=Pong/CN=localhost"
+	echo "Self-signed certificates generated in ./certs/"
 
-# Stop and remove containers, keeping volumes
-clean:
-	$(DOCKER_COMPOSE_CMD) down
-	@echo "Containers stopped and removed. Volumes are preserved."
+migrate: ## Run Django migrations
+	$(COMPOSE) exec backend python manage.py makemigrations
+	$(COMPOSE) exec backend python manage.py migrate
 
-# Complete cleanup - remove containers, volumes, and images
-fclean:
-	$(DOCKER_COMPOSE_CMD) down -v
-	-docker rmi $$(docker images -q 'your-app-*' 2> /dev/null) 2> /dev/null
-	-docker volume prune -f
-	@echo "Full cleanup completed. Containers, related images, and volumes removed."
+logs: ## View logs from all containers
+	$(COMPOSE) logs -f
 
-# Rebuild and restart
-re: fclean all
+logs-backend: ## View backend logs only
+	$(COMPOSE) logs -f backend
 
-# Show running containers
-ps:
-	$(DOCKER_COMPOSE_CMD) ps
+restart-backend: ## Restart just the backend container
+	$(COMPOSE) restart backend
 
-# Show logs
-logs:
-	$(DOCKER_COMPOSE_CMD) logs -f
-
-# Ensure these targets aren't matched with files
-.PHONY: help run all build clean fclean re ps logs ssl
+help: ## Display this help message
+	@echo "Usage:"
+	@echo "  make [target]"
+	@echo ""
+	@echo "Targets:"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-15s\033[0m %s\n", $$1, $$2}'

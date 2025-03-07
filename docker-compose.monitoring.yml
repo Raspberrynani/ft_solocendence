@@ -1,10 +1,8 @@
-version: '3'
-
 services:
   prometheus:
     image: prom/prometheus:v2.47.0
     volumes:
-      - ./monitoring/prometheus:/etc/prometheus
+      - prometheus_config:/etc/prometheus  # Using named volume instead of bind mount
       - prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
@@ -13,43 +11,47 @@ services:
       - '--web.console.templates=/etc/prometheus/consoles'
       - '--web.enable-lifecycle'
     ports:
-      - "9090:9090"
+      - "${PROMETHEUS_PORT:-9090}:9090"
     restart: unless-stopped
     networks:
       - monitoring_network
       - backend_network  # To access Django app
+    user: "nobody:nobody"  # Use non-root user for rootless compatibility
 
   alertmanager:
     image: prom/alertmanager:v0.25.0
     volumes:
-      - ./monitoring/alertmanager:/etc/alertmanager
+      - alertmanager_config:/etc/alertmanager  # Using named volume instead of bind mount
+      - alertmanager_data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
     ports:
-      - "9093:9093"
+      - "${ALERTMANAGER_PORT:-9093}:9093"
     restart: unless-stopped
     networks:
       - monitoring_network
+    user: "nobody:nobody"  # Use non-root user for rootless compatibility
 
   grafana:
     image: grafana/grafana:10.1.0
     volumes:
       - grafana_data:/var/lib/grafana
-      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
-      - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
+      - grafana_provisioning:/etc/grafana/provisioning  # Using named volume instead of bind mount
+      - grafana_dashboards:/var/lib/grafana/dashboards  # Using named volume instead of bind mount
     environment:
       - GF_SECURITY_ADMIN_PASSWORD=admin  # Change this in production
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_DOMAIN=localhost
       - GF_SMTP_ENABLED=false  # Configure email for alerts in production
     ports:
-      - "3000:3000"
+      - "${GRAFANA_PORT:-3000}:3000"
     restart: unless-stopped
     networks:
       - monitoring_network
     depends_on:
       - prometheus
+    user: "472"  # Grafana's default non-root user ID
 
   node-exporter:
     image: prom/node-exporter:v1.6.1
@@ -63,10 +65,11 @@ services:
       - /sys:/host/sys:ro
       - /:/rootfs:ro
     ports:
-      - "9100:9100"
+      - "${NODE_EXPORTER_PORT:-9100}:9100"
     restart: unless-stopped
     networks:
       - monitoring_network
+    user: "nobody:nobody"  # Use non-root user for rootless compatibility
 
   cadvisor:
     image: gcr.io/cadvisor/cadvisor:v0.47.1
@@ -77,7 +80,7 @@ services:
       - /var/lib/docker/:/var/lib/docker:ro
       - /dev/disk/:/dev/disk:ro
     ports:
-      - "8080:8080"
+      - "${CADVISOR_PORT:-8080}:8080"
     restart: unless-stopped
     networks:
       - monitoring_network
@@ -85,13 +88,42 @@ services:
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.13.1
     environment:
-      - DATA_SOURCE_NAME=postgresql://ponguser:WillowRapids@postgres:5432/pongdb?sslmode=disable
+      - DATA_SOURCE_NAME=postgresql://ponguser:WillowRapids@db:5432/pongdb?sslmode=disable
     ports:
-      - "9187:9187"
+      - "${POSTGRES_EXPORTER_PORT:-9187}:9187"
     restart: unless-stopped
     networks:
       - monitoring_network
       - backend_network  # To access PostgreSQL
+    user: "nobody:nobody"  # Use non-root user for rootless compatibility
+
+  # Setup service for monitoring configuration
+  monitoring-setup:
+    image: alpine:latest
+    volumes:
+      - ./monitoring:/tmp/monitoring
+      - prometheus_config:/prometheus_config
+      - alertmanager_config:/alertmanager_config
+      - grafana_provisioning:/grafana_provisioning
+      - grafana_dashboards:/grafana_dashboards
+    command: >
+      sh -c "
+        echo 'Copying Prometheus configuration...' &&
+        mkdir -p /prometheus_config &&
+        cp -r /tmp/monitoring/prometheus/* /prometheus_config/ &&
+        echo 'Copying Alertmanager configuration...' &&
+        mkdir -p /alertmanager_config &&
+        cp -r /tmp/monitoring/alertmanager/* /alertmanager_config/ &&
+        echo 'Copying Grafana provisioning...' &&
+        mkdir -p /grafana_provisioning &&
+        cp -r /tmp/monitoring/grafana/provisioning/* /grafana_provisioning/ &&
+        echo 'Copying Grafana dashboards...' &&
+        mkdir -p /grafana_dashboards &&
+        cp -r /tmp/monitoring/grafana/dashboards/* /grafana_dashboards/ &&
+        echo 'Monitoring setup complete.'
+      "
+    profiles:
+      - setup
 
 networks:
   monitoring_network:
@@ -101,4 +133,9 @@ networks:
 
 volumes:
   prometheus_data:
+  prometheus_config:
+  alertmanager_data:
+  alertmanager_config:
   grafana_data:
+  grafana_provisioning:
+  grafana_dashboards:
