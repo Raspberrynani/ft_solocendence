@@ -19,14 +19,14 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/5.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
 SECRET_KEY = 'django-insecure-9$$)9s51ex74)p+o7w#a_rz+q9xwah^)liqne2h(y1_abm%3#%'
 
-# SECURITY WARNING: don't run with debug turned on in production!
 DEBUG = True
 
 ALLOWED_HOSTS = ['*']
 
+
+# Application definition
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -37,8 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'channels',
     'corsheaders',
-    'api',
-    'pong',
+    'api',   # We will create this app next
+    'pong',  # And this one for WebSocket game logic
     'django_prometheus',
 ]
 
@@ -48,9 +48,20 @@ CHANNEL_LAYERS = {
     }
 }
 
-# Fix: CORS settings properly formatted
-CORS_ALLOW_ALL_ORIGINS = True  
-CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ALLOW_CREDENTIALS = True
+CORS_ORIGIN_ALLOW_ALL = True
+# CORS_ORIGIN_ALLOW_ALL = False
+CORS_ALLOWED_ORIGINS = [ 
+    "https://localhost:8001", 
+    "http://localhost:8001", 
+]
+
+CSRF_TRUSTED_ORIGINS = [
+    "https://localhost:8444",
+    "https://127.0.0.1:8444",
+]
+
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -70,39 +81,25 @@ CORS_ALLOW_HEADERS = [
     'user-agent',
     'x-csrftoken',
     'x-requested-with',
-    'x-forwarded-for',
-    'x-forwarded-host',
-    'x-forwarded-proto',
-    'x-real-ip',
-    'x-real-port',
-    'x-forwarded-port',
-    'x-forwarded-server',  
 ]
 
-DEBUG = True
 
+#security
 
-
-# Security settings
-# Since DEBUG is True, you might want to disable these in development
-
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = True
-    
-    # Session settings
+
+# Session settings
 SESSION_COOKIE_SECURE = False
-SESSION_COOKIE_HTTPONLY = False
+SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-    
-    # CSRF settings
+#CSRF
 CSRF_COOKIE_SECURE = False
-CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
 
-
-CORS_ALLOW_CREDENTIALS = True
-
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',  # Keep this first for CORS to work properly
+    'corsheaders.middleware.CorsMiddleware',
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -111,8 +108,6 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'django_prometheus.middleware.PrometheusBeforeMiddleware',
-    'django_prometheus.middleware.PrometheusAfterMiddleware',
-    
 ]
 
 ROOT_URLCONF = 'backend.urls'
@@ -141,12 +136,8 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'pongdb',
-        'USER': 'ponguser',
-        'PASSWORD': 'WillowRapids',
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
+        'ENGINE': 'django.db.backends.sqlite3',
+        'NAME': BASE_DIR / 'db.sqlite3',
     }
 }
 
@@ -191,3 +182,14 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+DATABASES = {
+    'default': {
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'pongdb',
+        'USER': 'ponguser',
+        'PASSWORD': 'WillowRapids',
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
+    }
+}
