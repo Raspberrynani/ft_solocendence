@@ -39,8 +39,10 @@ ssl:
 	@echo "SSL certificates generated successfully"
 
 # Run services (if already built)
-run: ssl
-	$(DOCKER_COMPOSE_CMD) up -d
+run:
+	./gen_ssl.sh
+	export UID=$$(id -u) && export GID=$$(id -g) && \
+	docker-compose -f docker-compose.yml -f docker-compose.monitoring.yml up -d
 
 # Build and run services
 all: build ssl run
