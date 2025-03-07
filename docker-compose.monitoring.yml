@@ -3,9 +3,10 @@ version: '3'
 services:
   prometheus:
     image: prom/prometheus:v2.47.0
+    user: "${UID}:${GID}"
     volumes:
       - ./monitoring/prometheus:/etc/prometheus
-      - prometheus_data:/prometheus
+      - /goinfre/${USER}/prometheus_data:/prometheus
     command:
       - '--config.file=/etc/prometheus/prometheus.yml'
       - '--storage.tsdb.path=/prometheus'
@@ -21,8 +22,10 @@ services:
 
   alertmanager:
     image: prom/alertmanager:v0.25.0
+    user: "${UID}:${GID}"
     volumes:
       - ./monitoring/alertmanager:/etc/alertmanager
+      - /goinfre/${USER}/alertmanager_data:/alertmanager
     command:
       - '--config.file=/etc/alertmanager/alertmanager.yml'
       - '--storage.path=/alertmanager'
@@ -34,8 +37,9 @@ services:
 
   grafana:
     image: grafana/grafana:10.1.0
+    user: "${UID}:${GID}"
     volumes:
-      - grafana_data:/var/lib/grafana
+      - /goinfre/${USER}/grafana_data:/var/lib/grafana
       - ./monitoring/grafana/provisioning:/etc/grafana/provisioning
       - ./monitoring/grafana/dashboards:/var/lib/grafana/dashboards
     environment:
@@ -84,6 +88,7 @@ services:
 
   postgres-exporter:
     image: prometheuscommunity/postgres-exporter:v0.13.1
+    user: "${UID}:${GID}"
     environment:
       - DATA_SOURCE_NAME=postgresql://ponguser:WillowRapids@postgres:5432/pongdb?sslmode=disable
     ports:
@@ -98,7 +103,3 @@ networks:
     driver: bridge
   backend_network:
     driver: bridge
-
-volumes:
-  prometheus_data:
-  grafana_data:
