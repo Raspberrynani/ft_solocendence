@@ -795,7 +795,6 @@ const App = (function() {
           
           // End game and return to menu
           endPongGame();
-          alert("Game Error Detected, Please retry the round, Game score will not be saved");
           return;
         }
       
