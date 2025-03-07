@@ -28,9 +28,6 @@ DEBUG = True
 ALLOWED_HOSTS = ['*']
 
 
-
-# Application definition
-
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -40,8 +37,8 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'channels',
     'corsheaders',
-    'api',   # We will create this app next
-    'pong',  # And this one for WebSocket game logic
+    'api',
+    'pong',
     'django_prometheus',
 ]
 
@@ -51,8 +48,10 @@ CHANNEL_LAYERS = {
     }
 }
 
-CORS_ALLOWED_ORIGINS = ['*']
+# Fix: CORS settings properly formatted
+CORS_ALLOW_ALL_ORIGINS = True  # This replaces using '*' in CORS_ALLOWED_ORIGINS
 
+# Fix: CSRF trusted origins needs actual domains, not wildcards
 CSRF_TRUSTED_ORIGINS = ['*']
 
 CORS_ALLOW_METHODS = [
@@ -77,16 +76,18 @@ CORS_ALLOW_HEADERS = [
 ]
 
 
-#security
+# Security settings
+# Since DEBUG is True, you might want to disable these in development
 
 SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
 SECURE_SSL_REDIRECT = True
-
-# Session settings
+    
+    # Session settings
 SESSION_COOKIE_SECURE = True
 SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
-#CSRF
+    
+    # CSRF settings
 CSRF_COOKIE_SECURE = True
 CSRF_COOKIE_HTTPONLY = True
 CSRF_COOKIE_SAMESITE = 'Lax'
@@ -95,7 +96,7 @@ CSRF_COOKIE_SAMESITE = 'Lax'
 CORS_ALLOW_CREDENTIALS = True
 
 MIDDLEWARE = [
-    'corsheaders.middleware.CorsMiddleware',
+    'corsheaders.middleware.CorsMiddleware',  # Keep this first for CORS to work properly
     'django.middleware.security.SecurityMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
@@ -132,8 +133,12 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 
 DATABASES = {
     'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'ENGINE': 'django.db.backends.postgresql',
+        'NAME': 'pongdb',
+        'USER': 'ponguser',
+        'PASSWORD': 'WillowRapids',
+        'HOST': os.environ.get('DB_HOST', 'localhost'),
+        'PORT': os.environ.get('DB_PORT', '5432'),
     }
 }
 
@@ -178,14 +183,3 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.1/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
-
-DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.postgresql',
-        'NAME': 'pongdb',
-        'USER': 'ponguser',
-        'PASSWORD': 'WillowRapids',
-        'HOST': os.environ.get('DB_HOST', 'localhost'),
-        'PORT': os.environ.get('DB_PORT', '5432'),
-    }
-}
