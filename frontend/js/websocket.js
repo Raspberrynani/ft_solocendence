@@ -27,12 +27,12 @@ const WebSocketManager = (function() {
     // Get hostname
     const hostname = window.location.hostname;
     
-    // Get port - use the same port as the current page
-    // This ensures the WebSocket connection goes through the same Nginx proxy
-    const port = window.location.port;
+    // Port mapping for WebSockets based on protocol
+    // These ports must match your exposed Docker ports
+    const wsPort = window.location.protocol === 'https:' ? '8444' : '8001';
     
     // Build the URL
-    return `${protocol}${hostname}${port ? ':' + port : ''}/ws/pong/`;
+    return `${protocol}${hostname}:${wsPort}/ws/pong/`;
   })();
 
   /**

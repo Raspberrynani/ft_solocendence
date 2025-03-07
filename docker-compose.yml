@@ -29,7 +29,8 @@ services:
         condition: service_healthy
     ports:
       - "8000:8000"  # HTTP
-      - "8443:8443"  # HTTPS/WebSocket
+      - "8001:8001"  # WebSocket
+      - "8443:8443"  # HTTPS
     volumes:
       - ./certs:/etc/certs:ro
       - ./backend:/app

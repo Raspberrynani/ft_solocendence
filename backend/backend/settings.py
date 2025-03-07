@@ -54,26 +54,32 @@ CHANNEL_LAYERS = {
         "BACKEND": "channels.layers.InMemoryChannelLayer",
     }
 }
+CORS_ALLOW_ALL_ORIGINS = True
+CORS_ORIGIN_ALLOW_ALL = True
+ALLOWED_HOSTS = ['*']
 
 CORS_ALLOWED_ORIGINS = [
     "https://localhost:8444",
     "https://127.0.0.1:8444",
     "https://localhost:8001",
     "https://127.0.0.1:8001",
-    "https://localhost:8001",
-    "https://127.0.0.1:8001",
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
     # Keep your existing entries
     "http://localhost:8000",
     "http://127.0.0.1:8000",
     "http://192.168.1.100:8000",
     "http://192.168.1.100:8001",
-    "http://172.31.184.155:8000",
-    "http://172.31.184.155:8001",
+    # Allow all for development
+    "http://localhost",
+    "https://localhost",
 ]
 
 CSRF_TRUSTED_ORIGINS = [
     "https://localhost:8444",
     "https://127.0.0.1:8444",
+    "http://localhost:8001",
+    "http://127.0.0.1:8001",
 ]
 
 CORS_ALLOW_METHODS = [
