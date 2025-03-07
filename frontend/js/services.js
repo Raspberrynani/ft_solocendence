@@ -275,10 +275,10 @@ const ErrorHandler = (function() {
      */
     function checkDevTools() {
       // Method 1: Window dimensions difference
-      const threshold = 100; // pixels difference threshold
-      const widthDiff = window.outerWidth - window.innerWidth;
-      const heightDiff = window.outerHeight - window.innerHeight;
-      const sizeDetected = (widthDiff > threshold || heightDiff > threshold);
+      // const threshold = 100; // pixels difference threshold
+      // const widthDiff = window.outerWidth - window.innerWidth;
+      // const heightDiff = window.outerHeight - window.innerHeight;
+      // const sizeDetected = (widthDiff > threshold || heightDiff > threshold);
 
       // Method 2: Debugger timing check
       let debuggerDetected = false;
