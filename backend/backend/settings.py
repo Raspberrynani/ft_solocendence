@@ -49,8 +49,7 @@ CHANNEL_LAYERS = {
 }
 
 # Fix: CORS settings properly formatted
-CORS_ALLOW_ALL_ORIGINS = True  # This replaces using '*' in CORS_ALLOWED_ORIGINS
-
+CORS_ALLOW_ALL_ORIGINS = True  
 CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
 CORS_ALLOW_METHODS = [
     'DELETE',
@@ -75,8 +74,6 @@ CORS_ALLOW_HEADERS = [
 
 DEBUG = True
 
-CORS_ALLOW_CREDENTIALS = True
-
 
 
 # Security settings
@@ -91,8 +88,8 @@ SESSION_COOKIE_HTTPONLY = True
 SESSION_COOKIE_SAMESITE = 'Lax'
     
     # CSRF settings
-CSRF_COOKIE_SECURE = True
-CSRF_COOKIE_HTTPONLY = True
+CSRF_COOKIE_SECURE = False
+CSRF_COOKIE_HTTPONLY = False
 CSRF_COOKIE_SAMESITE = 'Lax'
 
 
