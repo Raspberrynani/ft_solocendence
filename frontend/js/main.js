@@ -576,36 +576,80 @@ const App = (function() {
         
         // Reset state if needed
         if (modules.tournament) {
-            modules.tournament.resetTournamentState();
+            // Initialize the tournament buttons explicitly
+            if (typeof modules.tournament.initTournamentButtons === 'function') {
+                modules.tournament.initTournamentButtons();
+            }
+            
+            // Make sure start tournament button has a click handler
+            const startTournamentBtn = document.getElementById('start-tournament');
+            if (startTournamentBtn) {
+                console.log("Making sure start tournament button is clickable");
+                
+                // Remove any existing event listeners by cloning
+                const newStartBtn = startTournamentBtn.cloneNode(true);
+                startTournamentBtn.parentNode.replaceChild(newStartBtn, startTournamentBtn);
+                
+                // Add click handler directly
+                newStartBtn.addEventListener('click', (e) => {
+                    e.preventDefault();
+                    console.log("Start tournament button clicked directly from main.js");
+                    
+                    if (modules.tournament && typeof modules.tournament.startTournament === 'function') {
+                        modules.tournament.startTournament();
+                    } else if (modules.websocket) {
+                        // Try to get tournament ID
+                        const tournamentId = modules.tournament ? 
+                            modules.tournament.getCurrentTournamentId() : 
+                            null;
+                        
+                        if (tournamentId) {
+                            console.log("Sending start tournament message with ID:", tournamentId);
+                            modules.websocket.send({
+                                type: "start_tournament",
+                                tournament_id: tournamentId
+                            });
+                            
+                            // Visual feedback
+                            newStartBtn.disabled = true;
+                            newStartBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Starting...';
+                            
+                            // Re-enable after 3 seconds as fallback
+                            setTimeout(() => {
+                                newStartBtn.disabled = false;
+                                newStartBtn.innerHTML = 'Start Tournament';
+                            }, 3000);
+                        } else {
+                            console.error("Cannot start tournament: No tournament ID available");
+                            showError("Tournament not found. Please create or join a tournament first.");
+                        }
+                    }
+                });
+            }
         }
-
+    
         if (modules.tournament && typeof modules.tournament.isInTournament === 'function' && 
             modules.tournament.isInTournament()) {
           
-          // Show tournament room view (active tournament)
-          if (elements.activeTournament) {
-            elements.activeTournament.style.display = 'block';
-          }
-          
-          // Hide tournament list view
-          if (elements.availableTournaments) {
-            elements.availableTournaments.style.display = 'none';
-          }
-          
-          // Update ready UI if needed
-          if (modules.tournament && typeof modules.tournament.updateMatchReadyUI === 'function') {
-            modules.tournament.updateMatchReadyUI(true);
-          }
+            // Show tournament room view (active tournament)
+            if (elements.activeTournament) {
+                elements.activeTournament.style.display = 'block';
+            }
+            
+            // Hide tournament list view
+            if (elements.availableTournaments) {
+                elements.availableTournaments.style.display = 'none';
+            }
         } else {
-          // Show tournament list view
-          if (elements.availableTournaments) {
-            elements.availableTournaments.style.display = 'block';
-          }
-          
-          // Hide tournament room view
-          if (elements.activeTournament) {
-            elements.activeTournament.style.display = 'none';
-          }
+            // Show tournament list view
+            if (elements.availableTournaments) {
+                elements.availableTournaments.style.display = 'block';
+            }
+            
+            // Hide tournament room view
+            if (elements.activeTournament) {
+                elements.activeTournament.style.display = 'none';
+            }
         }
         
         // Request latest tournament list

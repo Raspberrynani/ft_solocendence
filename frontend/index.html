@@ -86,20 +86,19 @@
                   <button id="create-tournament" class="button btn btn-primary w-100 mb-2">Create Tournament</button>
                   <button id="recover-tournament" class="button btn btn-warning w-100">Rejoin My Tournament</button>
                 </div>
-              </div>
-              
+            </div>
             
             <!-- Tournament info (when in a tournament) -->
             <div id="active-tournament" class="card bg-transparent mt-3" style="display: none;">
                 <div class="card-body">
                     <h4 class="card-title">Tournament: <span id="tournament-name">-</span></h4>
-                    <div class="tournament-controls">
+                    <div class="tournament-controls mb-3">
                         <!-- Only tournament creator sees this -->
-                        <button id="start-tournament" class="btn btn-sm btn-success mb-2" style="display: none;">
-                            Start Tournament
+                        <button id="start-tournament" class="btn btn-success btn-lg w-100 mb-2" style="display: none;">
+                            <i class="fa fa-play-circle"></i> Start Tournament
                         </button>
-                        <button id="leave-tournament" class="btn btn-sm btn-danger mb-2">
-                            Leave Tournament
+                        <button id="leave-tournament" class="btn btn-danger">
+                            <i class="fa fa-sign-out"></i> Leave Tournament
                         </button>
                     </div>
                     
@@ -108,15 +107,15 @@
                     
                     <div id="tournament-matches">
                         <h5>Current Match</h5>
-                        <div id="current-match" class="current-match-display mb-2">No active match</div>
+                        <div id="current-match" class="card bg-dark mb-3 p-2 text-center">No active match</div>
                         
                         <h5>Upcoming Matches</h5>
-                        <ul id="upcoming-matches" class="list-group list-group-flush mb-2"></ul>
+                        <ul id="upcoming-matches" class="list-group list-group-flush mb-3"></ul>
                         
                         <h5>Completed Matches</h5>
                         <ul id="completed-matches" class="list-group list-group-flush"></ul>
                     </div>
-
+        
                     <div id="tournament-ready-section" class="mt-3" style="display: none;">
                         <div class="alert alert-info">
                           <p><strong>Ready for your next match?</strong></p>
@@ -126,7 +125,7 @@
                           </button>
                         </div>
                     </div>
-
+        
                     <div id="tournament-status-notification" class="alert alert-primary mt-3" style="display: none;">
                         <span id="tournament-status-message">Waiting for other players to be ready...</span>
                     </div>
@@ -148,9 +147,15 @@
                 <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
                 WARNING: Leaving this page will remove you from the current tournament!
             </div>
+            
+            <button id="tournament-debug-start" class="btn btn-sm btn-dark mt-2 w-100" style="display: none;">
+                Debug: Force Start Tournament
+            </button>
 
             <!-- Back Button -->
             <button id="tournament-back-button" data-navigate="game-page" class="button btn btn-secondary mt-3 w-100">Back to Menu</button>
+        
+            <!-- Add a debugging button to help during development (can be removed in production) -->
         </section>
 
         <!-- Custom Game Page -->
@@ -398,7 +403,227 @@
     <!-- Background Pong Script -->
     <script src="js/easter-egg.js"></script>
 
+    <script src="js/tournament-debug.js"></script>
+
     <!-- Main Application Script (Load Last) -->
     <script src="js/main.js"></script>
+
+    <button id="tournament-debug-start" class="btn btn-sm btn-dark mt-2 w-100" style="display: none;">
+        Debug: Force Start Tournament
+    </button>
+    
+    <!-- Add this script just before the closing </body> tag -->
+    <script>
+        // Simple tournament button fixer script
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log("Tournament button fixer script running");
+            
+            // Try to make start button visible for tournament creator
+            function checkAndFixStartButton() {
+                const startBtn = document.getElementById('start-tournament');
+                if (!startBtn) return;
+                
+                let isCreator = false;
+                try {
+                    isCreator = localStorage.getItem('isTournamentCreator') === 'true';
+                } catch (e) { }
+                
+                console.log("Button fixer - Creator status:", isCreator);
+                
+                if (isCreator) {
+                    console.log("Making start button visible from fixer script");
+                    startBtn.style.display = 'block';
+                    
+                    // Ensure click handler
+                    if (!startBtn._hasClickHandler) {
+                        startBtn.addEventListener('click', function(e) {
+                            e.preventDefault();
+                            
+                            // Get tournament ID
+                            let tournamentId = null;
+                            try {
+                                tournamentId = localStorage.getItem('activeTournamentId');
+                            } catch (e) { }
+                            
+                            if (tournamentId && window.WebSocketManager) {
+                                console.log("Sending start tournament from fixer");
+                                WebSocketManager.send({
+                                    type: "start_tournament",
+                                    tournament_id: tournamentId
+                                });
+                                
+                                // Visual feedback
+                                startBtn.disabled = true;
+                                startBtn.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Starting...';
+                                
+                                // Re-enable after timeout
+                                setTimeout(() => {
+                                    startBtn.disabled = false;
+                                    startBtn.innerHTML = '<i class="fa fa-play-circle"></i> Start Tournament';
+                                }, 3000);
+                            }
+                        });
+                        startBtn._hasClickHandler = true;
+                    }
+                }
+            }
+            
+            // Setup debug button
+            const debugBtn = document.getElementById('tournament-debug-start');
+            if (debugBtn) {
+                debugBtn.addEventListener('click', function() {
+                    console.log("Debug start button clicked");
+                    
+                    // Force creator status to true
+                    try {
+                        localStorage.setItem('isTournamentCreator', 'true');
+                    } catch (e) { }
+                    
+                    // Get tournament ID
+                    let tournamentId = null;
+                    try {
+                        tournamentId = localStorage.getItem('activeTournamentId');
+                    } catch (e) { }
+                    
+                    // Try to send start command
+                    if (tournamentId && window.WebSocketManager) {
+                        WebSocketManager.send({
+                            type: "start_tournament",
+                            tournament_id: tournamentId
+                        });
+                        
+                        alert("Debug: Start tournament command sent for ID: " + tournamentId);
+                    } else {
+                        alert("Cannot start: No tournament ID or WebSocket connection");
+                    }
+                    
+                    // Immediately check and fix the start button
+                    checkAndFixStartButton();
+                });
+                
+                // Show debug button in development or with URL param
+                if (window.location.search.includes('debug=1') || 
+                    window.location.hostname === 'localhost') {
+                    debugBtn.style.display = 'block';
+                }
+            }
+            
+            // Run button check when tournament page is shown
+            const tournamentPage = document.getElementById('tournament-page');
+            if (tournamentPage) {
+                const observer = new MutationObserver(function(mutations) {
+                    mutations.forEach(function(mutation) {
+                        if (mutation.target.id === 'tournament-page' && 
+                            mutation.target.classList.contains('active')) {
+                            setTimeout(checkAndFixStartButton, 100);
+                        }
+                    });
+                });
+                
+                observer.observe(tournamentPage, { attributes: true, attributeFilter: ['class'] });
+            }
+            
+            // Run on start to check button status
+            setTimeout(checkAndFixStartButton, 500);
+        });
+    </script>
+    <script>
+        // Direct fix for Create Tournament button
+        document.addEventListener('DOMContentLoaded', function() {
+          console.log("Create tournament button fix running");
+          
+          // Target the specific button
+          const createTournamentBtn = document.getElementById('create-tournament');
+          if (createTournamentBtn) {
+            console.log("Found the create tournament button, adding direct event listener");
+            
+            // Remove any existing listeners by cloning the button
+            const newBtn = createTournamentBtn.cloneNode(true);
+            if (createTournamentBtn.parentNode) {
+              createTournamentBtn.parentNode.replaceChild(newBtn, createTournamentBtn);
+            }
+            
+            // Add the direct click handler
+            newBtn.addEventListener('click', function(e) {
+              e.preventDefault();
+              console.log("Create tournament button clicked directly");
+              
+              // Get the nickname
+              const nicknameInput = document.getElementById('nickname');
+              if (!nicknameInput || !nicknameInput.value.trim()) {
+                alert("Please enter your nickname first");
+                return;
+              }
+              
+              const nickname = nicknameInput.value.trim();
+              
+              // Get rounds
+              const roundsInput = document.getElementById('rounds-input');
+              const rounds = roundsInput ? parseInt(roundsInput.value) || 3 : 3;
+              
+              // Create a tournament name
+              const tournamentName = `${nickname}'s Tournament`;
+              
+              console.log(`Creating tournament: ${tournamentName} by ${nickname} with ${rounds} rounds`);
+              
+              // Send the create tournament message directly
+              if (window.WebSocketManager && WebSocketManager.isConnected && WebSocketManager.isConnected()) {
+                WebSocketManager.send({
+                  type: "create_tournament",
+                  nickname: nickname,
+                  name: tournamentName,
+                  rounds: rounds
+                });
+                
+                // Show visual feedback
+                newBtn.disabled = true;
+                newBtn.innerText = "Creating...";
+                
+                // Re-enable after timeout
+                setTimeout(() => {
+                  newBtn.disabled = false;
+                  newBtn.innerText = "Create Tournament";
+                }, 3000);
+                
+                // Show toast if available
+                if (window.Utils && Utils.showToast) {
+                  Utils.showToast("Creating tournament...", "info");
+                }
+              } else {
+                alert("Cannot create tournament: Not connected to server");
+              }
+            });
+            
+            console.log("Direct event listener added to create tournament button");
+          } else {
+            console.error("Create tournament button not found in DOM");
+          }
+          
+          // Also make sure the TournamentManager is initialized
+          if (window.TournamentManager && typeof TournamentManager.init === 'function') {
+            // Get any existing nickname
+            const nicknameInput = document.getElementById('nickname');
+            const nickname = nicknameInput ? nicknameInput.value.trim() : "";
+            
+            // Re-initialize TournamentManager
+            console.log("Re-initializing TournamentManager with current elements");
+            TournamentManager.init({
+              createTournament: document.getElementById('create-tournament'),
+              startTournament: document.getElementById('start-tournament'),
+              leaveTournament: document.getElementById('leave-tournament'),
+              tournamentName: document.getElementById('tournament-name'),
+              tournamentPlayers: document.getElementById('tournament-players'),
+              currentMatch: document.getElementById('current-match'),
+              upcomingMatches: document.getElementById('upcoming-matches'),
+              completedMatches: document.getElementById('completed-matches'),
+              activeTournament: document.getElementById('active-tournament'),
+              availableTournaments: document.getElementById('available-tournaments'),
+              tournamentList: document.getElementById('tournament-list'),
+              roundsInput: document.getElementById('rounds-input')
+            }, nickname);
+          }
+        });
+    </script>
+
 </body>
 </html>
