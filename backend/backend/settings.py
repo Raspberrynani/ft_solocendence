@@ -70,7 +70,7 @@ CSRF_TRUSTED_ORIGINS = [
     "https://localhost:8444",
     "https://127.0.0.1:8444",
     "https://0.0.0.0:8444",
-    "https://10.14.5.2:8444",
+    # "https://10.14.5.2:8444",
 ]
 
 CORS_ALLOW_METHODS = [
