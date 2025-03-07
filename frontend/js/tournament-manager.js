@@ -43,6 +43,137 @@ const TournamentManager = (function() {
     }
 
     /**
+     * Show waiting for next match screen
+     * @param {boolean} playerWon - Whether the player won the last match
+     */
+    function showWaitingForNextMatch(playerWon) {
+      const waitingOverlay = document.createElement('div');
+      waitingOverlay.id = 'tournament-waiting-overlay';
+      waitingOverlay.className = 'tournament-waiting-overlay';
+      waitingOverlay.innerHTML = `
+          <div class="waiting-content">
+              <h3>${playerWon ? '🏆 Match Victory!' : 'Match Complete'}</h3>
+              <p>${playerWon ? 
+                  'Congratulations! You won the match.' : 
+                  'Match completed. Better luck in the next one!'}</p>
+              <div class="waiting-animation">
+                  <p>Waiting for next match...</p>
+                  <div class="waiting-spinner"></div>
+              </div>
+              <p class="waiting-tip">Stay on this page until your next match begins</p>
+          </div>
+      `;
+      
+      document.body.appendChild(waitingOverlay);
+      
+      // Add overlay styles if not already added
+      if (!document.getElementById('tournament-waiting-styles')) {
+          const waitingStyles = document.createElement('style');
+          waitingStyles.id = 'tournament-waiting-styles';
+          waitingStyles.textContent = `
+              .tournament-waiting-overlay {
+                  position: fixed;
+                  top: 0;
+                  left: 0;
+                  width: 100%;
+                  height: 100%;
+                  background: rgba(0, 0, 0, 0.8);
+                  z-index: 9999;
+                  display: flex;
+                  justify-content: center;
+                  align-items: center;
+                  color: white;
+                  font-family: Arial, sans-serif;
+              }
+              
+              .waiting-content {
+                  background: rgba(0, 20, 40, 0.8);
+                  border: 2px solid #00d4ff;
+                  border-radius: 10px;
+                  padding: 30px;
+                  text-align: center;
+                  max-width: 400px;
+                  box-shadow: 0 0 20px rgba(0, 212, 255, 0.3);
+              }
+              
+              .waiting-content h3 {
+                  font-size: 24px;
+                  margin-bottom: 15px;
+                  color: #00d4ff;
+              }
+              
+              .waiting-animation {
+                  margin: 25px 0;
+              }
+              
+              .waiting-spinner {
+                  width: 40px;
+                  height: 40px;
+                  margin: 15px auto;
+                  border: 4px solid rgba(0, 212, 255, 0.3);
+                  border-top: 4px solid #00d4ff;
+                  border-radius: 50%;
+                  animation: spin 2s linear infinite;
+              }
+              
+              .waiting-tip {
+                  font-size: 14px;
+                  opacity: 0.7;
+                  margin-top: 20px;
+              }
+              
+              @keyframes spin {
+                  0% { transform: rotate(0deg); }
+                  100% { transform: rotate(360deg); }
+              }
+          `;
+          document.head.appendChild(waitingStyles);
+      }
+      
+      return waitingOverlay;
+    }
+
+    /**
+    * Hide waiting overlay
+    */
+    function hideWaitingOverlay() {
+      const overlay = document.getElementById('tournament-waiting-overlay');
+      if (overlay) {
+          // Fade out and remove
+          overlay.style.transition = 'opacity 0.5s';
+          overlay.style.opacity = '0';
+          setTimeout(() => {
+              if (overlay.parentNode) {
+                  overlay.parentNode.removeChild(overlay);
+              }
+          }, 500);
+      }
+    }
+
+    /**
+    * Handle match ready event (called when server signals match is ready)
+    * @param {string} message - Server message
+    */
+    function handleMatchReady(message) {
+      console.log("Match ready:", message);
+      
+      // Hide the waiting overlay
+
+
+      hideWaitingOverlay();
+      
+      // Show toast notification
+      if (typeof Utils !== 'undefined' && Utils.showToast) {
+          Utils.showToast(message || "Your match is starting!", "info");
+      }
+      
+      // Ensure we're on tournament page
+      if (window.UIManager) {
+          UIManager.navigateTo('tournament-page');
+      }
+    }
+
+    /**
      * Show match waiting screen between tournament matches
      * @param {boolean} playerWon - Whether the current player won the last match
      */
@@ -108,36 +239,6 @@ const TournamentManager = (function() {
           
           // Restart countdown
           startMatchCountdown(10);
-      }
-    }
-    
-    
-    /**
-     * Handle tournament match ready notification
-     * @param {string} message - Ready message
-     */
-    function handleMatchReady(message) {
-      console.log("Tournament match ready:", message);
-      
-      // Hide any waiting screens
-      hideMatchWaitingScreen();
-      
-      // Focus the browser tab if possible
-      if ('focus' in window) {
-        window.focus();
-      }
-      
-      // Flash the browser tab if not focused
-      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
-        // Try to use notifications if available and permitted
-        try {
-          new Notification('Tournament Match Ready', {
-            body: message || 'Your tournament match is about to begin!',
-            icon: '/favicon.ico'
-          });
-        } catch (e) {
-          console.log("Could not show notification:", e);
-        }
       }
     }
 

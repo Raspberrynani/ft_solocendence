@@ -777,7 +777,7 @@ const App = (function() {
         console.log(`handleGameOver called: score=${score}, winner=${winner}, rounds=${state.game.rounds.current}, target=${state.game.rounds.target}`);
         
         //Deadlock Patch
-            // Force cleanup if winner is undefined but score indicates game should be over
+        // Force cleanup if winner is undefined but score indicates game should be over
         const winThreshold = Math.ceil(state.game.rounds.target / 2);
         if (winner === undefined && score >= winThreshold) {
             console.log('Winner undefined but score indicates game over - forcing cleanup');
@@ -790,15 +790,15 @@ const App = (function() {
                 PongGame.stop();
             }
             
-            // Exit fullscreen
-            exitFullscreen();
-            
-            // End game and return to menu
-            endPongGame();
-            alert("Game Error Detected, Please retry the round, Game score will not be saved");
+            // Safe exit fullscreen with error handling
+            safeExitFullscreen().then(() => {
+                // End game and return to menu
+                endPongGame();
+                alert("Game Error Detected, Please retry the round, Game score will not be saved");
+            });
             return;
         }
-
+    
         // Game is over if we have a definitive winner
         if (winner === 'left' || winner === 'right') {
             console.log('Game is over - processing end game logic');
@@ -808,31 +808,53 @@ const App = (function() {
             if (state.game.isTournament) {
                 console.log('Tournament game over - notifying server and returning to tournament view');
                 
-                // Send game over to WebSocket to notify tournament system
-                if (modules.websocket) {
-                    modules.websocket.sendGameOver(state.game.rounds.current);
-                }
-                
-                // Stop the appropriate game engine
+                // Stop the appropriate game engine first
                 if (state.game.isMultiplayer && window.ServerPong) {
                     ServerPong.stop();
                 } else if (window.PongGame) {
                     PongGame.stop();
                 }
                 
-                // Exit fullscreen if active
-                exitFullscreen();
-                
-                // Navigate back to game page where tournament UI is
-                setTimeout(() => {
+                // Then safely exit fullscreen with proper error handling
+                safeExitFullscreen().finally(() => {
+                    // Navigate to tournament page first, so UI is ready
                     if (modules.ui) {
-                        // Navigate to tournament page instead of game page
                         modules.ui.navigateTo('tournament-page');
                         
-                        // Show waiting message
-                        showTournamentMatchComplete(winner, state.game.playerSide);
+                        // Clear any tournament warnings
+                        clearTournamentWarnings();
+                        
+                        // Determine win/loss status
+                        const playerSide = state.game.playerSide || 'left';
+                        const playerWon = (playerSide === 'left' && winner === 'left') || 
+                                         (playerSide === 'right' && winner === 'right');
+                        
+                        // Show match result and waiting UI
+                        if (window.TournamentManager && typeof TournamentManager.showWaitingForNextMatch === 'function') {
+                            TournamentManager.showWaitingForNextMatch(playerWon);
+                        } else {
+                            // Fallback notification if TournamentManager not available
+                            if (playerWon) {
+                                showToast('You won this match! Waiting for next match...', 'success');
+                            } else {
+                                showToast('Match complete. Waiting for tournament to continue...', 'info');
+                            }
+                        }
+                        
+                        // Send game over to WebSocket to notify tournament system
+                        if (modules.websocket) {
+                            modules.websocket.sendGameOver(score);
+                            
+                            // After a short delay, tell server we're ready for next match
+                            setTimeout(() => {
+                                modules.websocket.send({
+                                    type: "tournament_player_ready"
+                                });
+                                console.log("Player ready notification sent to server");
+                            }, 1500);
+                        }
                     }
-                }, 500);
+                });
             } else {
                 console.log('Regular game over - ending game');
                 
@@ -875,10 +897,68 @@ const App = (function() {
                     });
                 }
                 
-                endPongGame();
+                // Safely exit fullscreen before ending game
+                safeExitFullscreen().finally(() => {
+                    endPongGame();
+                });
             }
         } else {
             console.log('No definitive winner yet - continuing game');
+        }
+    }
+    
+    /**
+     * Safely exit fullscreen with error handling
+     * @returns {Promise} Promise that resolves when fullscreen exit is complete
+     */
+    function safeExitFullscreen() {
+        // Check if not in fullscreen already
+        if (!document.fullscreenElement && 
+            !document.webkitFullscreenElement && 
+            !document.mozFullScreenElement && 
+            !document.msFullscreenElement) {
+            return Promise.resolve();
+        }
+        
+        return new Promise(resolve => {
+            try {
+                // Try different fullscreen exit methods with proper error handling
+                const exitPromise = document.exitFullscreen ? document.exitFullscreen() :
+                                  document.webkitExitFullscreen ? document.webkitExitFullscreen() :
+                                  document.mozCancelFullScreen ? document.mozCancelFullScreen() :
+                                  document.msExitFullscreen ? document.msExitFullscreen() :
+                                  Promise.resolve();
+                
+                exitPromise.then(resolve).catch(err => {
+                    console.warn("Error exiting fullscreen:", err);
+                    resolve(); // Resolve anyway to continue execution
+                });
+            } catch (error) {
+                console.warn("Failed to exit fullscreen:", error);
+                resolve(); // Resolve anyway to continue execution
+            }
+        });
+    }
+    
+    /**
+     * Clear all tournament warning banners and UI elements
+     */
+    function clearTournamentWarnings() {
+        // Clear tournament leave warning
+        const leaveWarning = document.getElementById('tournament-leave-warning');
+        if (leaveWarning) {
+            leaveWarning.style.display = 'none';
+        }
+        
+        // Clear tournament warning banner
+        const warningBanner = document.getElementById('tournament-warning-banner');
+        if (warningBanner) {
+            warningBanner.style.display = 'none';
+        }
+        
+        // Additional cleanup if needed
+        if (window.TournamentManager && typeof TournamentManager.clearWarnings === 'function') {
+            TournamentManager.clearWarnings();
         }
     }
 
@@ -1744,6 +1824,38 @@ const App = (function() {
             const errorMessage = `Could not fetch stats for ${playerName}`;
             showNetworkError(errorMessage);
         }
+    }
+
+    /**
+     * Exit fullscreen mode safely with error handling
+     * @returns {Promise} - Promise that resolves when fullscreen is exited
+     */
+    function safeExitFullscreen() {
+        if (!document.fullscreenElement && 
+            !document.webkitFullscreenElement && 
+            !document.mozFullScreenElement && 
+            !document.msFullscreenElement) {
+            // Already not in fullscreen
+            return Promise.resolve();
+        }
+        
+        return new Promise(resolve => {
+            try {
+                const exitPromise = document.exitFullscreen ? document.exitFullscreen() :
+                                document.webkitExitFullscreen ? document.webkitExitFullscreen() :
+                                document.mozCancelFullScreen ? document.mozCancelFullScreen() :
+                                document.msExitFullscreen ? document.msExitFullscreen() :
+                                Promise.resolve();
+                
+                exitPromise.then(resolve).catch(err => {
+                    console.warn("Error exiting fullscreen:", err);
+                    resolve(); // Resolve anyway to continue execution
+                });
+            } catch (error) {
+                console.warn("Failed to exit fullscreen:", error);
+                resolve(); // Resolve anyway to continue execution
+            }
+        });
     }
     
     /**

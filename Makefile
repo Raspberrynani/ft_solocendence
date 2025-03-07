@@ -41,6 +41,8 @@ ssl:
 # Run services (if already built)
 run: ssl
 	$(DOCKER_COMPOSE_CMD) up -d
+	@echo "Services started successfully"
+	@echo "You can now access the application at https://localhost:8001"
 
 # Build and run services
 all: build ssl run

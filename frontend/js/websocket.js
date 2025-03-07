@@ -280,16 +280,15 @@ const WebSocketManager = (function() {
       },
 
       tournament_match_ready: () => {
-        // Show toast notification
-        if (typeof Utils !== 'undefined' && Utils.showToast) {
-          Utils.showToast(data.message || "Your tournament match is about to begin!", "info");
+        if (gameCallbacks.onMatchReady) {
+            gameCallbacks.onMatchReady(data.message);
         }
         
         // Forward to TournamentManager
         if (window.TournamentManager && typeof TournamentManager.handleMatchReady === 'function') {
-          TournamentManager.handleMatchReady(data.message);
+            TournamentManager.handleMatchReady(data.message);
         }
-      },
+    },
       
       tournament_created: () => {
         if (window.TournamentManager) {
@@ -462,6 +461,37 @@ const WebSocketManager = (function() {
     forcedReconnect = true;
     connect();
   }
+
+  /**
+   * Handle tournament match ready notification
+   * @param {string} message - Ready message
+   */
+    
+    function handleMatchReady(message) {
+      console.log("Received match ready notification:", message);
+      
+      // Focus window if possible
+      if (window.focus) {
+          window.focus();
+      }
+      
+      // Flash the title if document is hidden
+      if (document.hidden) {
+          const originalTitle = document.title;
+          let titleFlashes = 0;
+          
+          const flashTitle = setInterval(() => {
+              document.title = titleFlashes % 2 ? originalTitle : "🎮 MATCH READY!";
+              titleFlashes++;
+              
+              if (titleFlashes > 10 || !document.hidden) {
+                  clearInterval(flashTitle);
+                  document.title = originalTitle;
+              }
+          }, 500);
+      }
+  }
+
   
   /**
    * Close the WebSocket connection
@@ -521,7 +551,8 @@ const WebSocketManager = (function() {
     createTournament,
     joinTournament,
     startTournament,
-    leaveTournament
+    leaveTournament,
+    onMatchReady: handleMatchReady
   };
 })();
 
