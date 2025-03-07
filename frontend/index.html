@@ -80,12 +80,14 @@
             <!-- Tournament creation section -->
             <div class="card bg-transparent mb-3">
                 <div class="card-body">
-                    <h4 class="card-title">Create or Join Tournament</h4>
-                    <p class="card-text">Create your own tournament or join an existing one.</p>
-                    
-                    <button id="create-tournament" class="button btn btn-primary w-100 mb-2">Create Tournament</button>
+                  <h4 class="card-title">Create or Join Tournament</h4>
+                  <p class="card-text">Create your own tournament or join an existing one.</p>
+                  
+                  <button id="create-tournament" class="button btn btn-primary w-100 mb-2">Create Tournament</button>
+                  <button id="recover-tournament" class="button btn btn-warning w-100">Rejoin My Tournament</button>
                 </div>
-            </div>
+              </div>
+              
             
             <!-- Tournament info (when in a tournament) -->
             <div id="active-tournament" class="card bg-transparent mt-3" style="display: none;">
@@ -113,6 +115,20 @@
                         
                         <h5>Completed Matches</h5>
                         <ul id="completed-matches" class="list-group list-group-flush"></ul>
+                    </div>
+
+                    <div id="tournament-ready-section" class="mt-3" style="display: none;">
+                        <div class="alert alert-info">
+                          <p><strong>Ready for your next match?</strong></p>
+                          <p>Click the button below when you're ready to play your next match.</p>
+                          <button id="ready-for-match" class="btn btn-success w-100">
+                            <i class="fa fa-check-circle"></i> I'm Ready for My Next Match
+                          </button>
+                        </div>
+                    </div>
+
+                    <div id="tournament-status-notification" class="alert alert-primary mt-3" style="display: none;">
+                        <span id="tournament-status-message">Waiting for other players to be ready...</span>
                     </div>
                 </div>
             </div>

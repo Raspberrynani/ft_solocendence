@@ -1041,6 +1041,50 @@ class PongConsumer(AsyncWebsocketConsumer):
                         "type": "tournament_error",
                         "message": "Tournament not found"
                     }))
+                    
+            elif msg_type == "get_tournament_info":
+                # Handle tournament recovery request
+                tournament_id = data.get("tournament_id")
+                
+                logger.info(f"Player {self.channel_name} requesting tournament info for {tournament_id}")
+                
+                if tournament_id in active_tournaments:
+                    tournament = active_tournaments[tournament_id]
+                    
+                    # Check if player is already in this tournament
+                    player_in_tournament = False
+                    for player in tournament.players:
+                        if player["channel"] == self.channel_name:
+                            player_in_tournament = True
+                            break
+                    
+                    if player_in_tournament:
+                        logger.info(f"Player found in tournament {tournament_id}, sending info")
+                        
+                        # Update player's tournament tracking if needed
+                        tournament_players[self.channel_name] = tournament_id
+                        
+                        # Send tournament state to the player
+                        await self.send(text_data=json.dumps({
+                            "type": "tournament_joined",
+                            "tournament": tournament.get_state()
+                        }))
+                    else:
+                        logger.info(f"Player not found in tournament {tournament_id}")
+                        
+                        # Send error
+                        await self.send(text_data=json.dumps({
+                            "type": "tournament_error",
+                            "message": "You are not a participant in this tournament"
+                        }))
+                else:
+                    # Tournament not found
+                    logger.info(f"Tournament {tournament_id} not found")
+                    
+                    await self.send(text_data=json.dumps({
+                        "type": "tournament_error",
+                        "message": "Tournament not found or has ended"
+                    }))
             
             elif msg_type == "start_tournament":
                 tournament_id = data.get("tournament_id")

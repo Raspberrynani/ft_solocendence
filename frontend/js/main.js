@@ -355,6 +355,40 @@ const App = (function() {
                 startCustomGameWithSettings(customSettings);
             });
         }
+
+        // Tournament recovery button
+        const recoverTournamentButton = document.getElementById('recover-tournament');
+        if (recoverTournamentButton) {
+        recoverTournamentButton.addEventListener('click', () => {
+            if (modules.tournament && typeof modules.tournament.recoverActiveTournament === 'function') {
+            modules.tournament.recoverActiveTournament();
+            } else {
+            showError('Tournament recovery functionality not available', 'warning');
+            }
+        });
+        }
+
+        // Ready for match button
+        const readyForMatchButton = document.getElementById('ready-for-match');
+        if (readyForMatchButton) {
+        readyForMatchButton.addEventListener('click', () => {
+            if (modules.tournament && typeof modules.tournament.sendPlayerReady === 'function') {
+            modules.tournament.sendPlayerReady();
+            
+            // Give visual feedback
+            readyForMatchButton.disabled = true;
+            readyForMatchButton.innerHTML = '<i class="fa fa-spinner fa-spin"></i> Waiting for other players...';
+            
+            // Re-enable after 10 seconds (in case of server issues)
+            setTimeout(() => {
+                readyForMatchButton.disabled = false;
+                readyForMatchButton.innerHTML = '<i class="fa fa-check-circle"></i> I\'m Ready for My Next Match';
+            }, 10000);
+            } else {
+            showError('Cannot send ready status, please refresh the page', 'warning');
+            }
+        });
+        }
         
         // 7. Navigation buttons (data-navigate attribute)
         document.querySelectorAll('[data-navigate]').forEach(button => {
@@ -543,6 +577,35 @@ const App = (function() {
         // Reset state if needed
         if (modules.tournament) {
             modules.tournament.resetTournamentState();
+        }
+
+        if (modules.tournament && typeof modules.tournament.isInTournament === 'function' && 
+            modules.tournament.isInTournament()) {
+          
+          // Show tournament room view (active tournament)
+          if (elements.activeTournament) {
+            elements.activeTournament.style.display = 'block';
+          }
+          
+          // Hide tournament list view
+          if (elements.availableTournaments) {
+            elements.availableTournaments.style.display = 'none';
+          }
+          
+          // Update ready UI if needed
+          if (modules.tournament && typeof modules.tournament.updateMatchReadyUI === 'function') {
+            modules.tournament.updateMatchReadyUI(true);
+          }
+        } else {
+          // Show tournament list view
+          if (elements.availableTournaments) {
+            elements.availableTournaments.style.display = 'block';
+          }
+          
+          // Hide tournament room view
+          if (elements.activeTournament) {
+            elements.activeTournament.style.display = 'none';
+          }
         }
         
         // Request latest tournament list

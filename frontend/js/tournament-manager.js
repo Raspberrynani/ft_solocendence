@@ -939,6 +939,214 @@ const TournamentManager = (function() {
         currentNickname = nickname;
       }
     }
+
+    /**
+     * Show the ready-for-match section
+     * @param {boolean} show - Whether to show or hide
+     */
+    function showReadySection(show) {
+      const readySection = document.getElementById('tournament-ready-section');
+      if (readySection) {
+        readySection.style.display = show ? 'block' : 'none';
+      }
+    }
+
+    /**
+     * Show tournament status notification
+     * @param {string} message - Message to display
+     * @param {string} type - Alert type (primary, success, warning, danger)
+     */
+    function showTournamentStatus(message, type = 'primary') {
+      const statusArea = document.getElementById('tournament-status-notification');
+      const statusMessage = document.getElementById('tournament-status-message');
+      
+      if (statusArea && statusMessage) {
+        // Update message
+        statusMessage.textContent = message;
+        
+        // Update alert type
+        statusArea.className = `alert alert-${type} mt-3`;
+        
+        // Show the notification
+        statusArea.style.display = 'block';
+      }
+    }
+
+    /**
+     * Hide tournament status notification
+     */
+    function hideTournamentStatus() {
+      const statusArea = document.getElementById('tournament-status-notification');
+      if (statusArea) {
+        statusArea.style.display = 'none';
+      }
+    }
+
+    /**
+     * Recover active tournament if player is in one
+     * @returns {boolean} - Whether recovery was successful
+     */
+    function recoverActiveTournament() {
+      // Check localStorage for tournament ID
+      let tournamentId = null;
+      
+      try {
+        tournamentId = localStorage.getItem('activeTournamentId');
+      } catch (e) {
+        console.warn("Could not access localStorage", e);
+      }
+      
+      // If no stored ID, check current internal state
+      if (!tournamentId && currentTournament) {
+        tournamentId = currentTournament.id;
+      }
+      
+      if (!tournamentId) {
+        // No active tournament found
+        if (typeof Utils !== 'undefined' && Utils.showToast) {
+          Utils.showToast("No active tournament found", "warning");
+        } else {
+          alert("No active tournament found");
+        }
+        return false;
+      }
+      
+      // Request latest tournament data
+      if (modules.websocket && modules.websocket.isConnected()) {
+        modules.websocket.send({
+          type: "get_tournament_info",
+          tournament_id: tournamentId
+        });
+        
+        if (typeof Utils !== 'undefined' && Utils.showToast) {
+          Utils.showToast("Rejoining tournament...", "info");
+        }
+        
+        // Ensure active tournament section is visible
+        if (elements.activeTournament) {
+          elements.activeTournament.style.display = 'block';
+        }
+        
+        // Ensure available tournaments section is hidden
+        if (elements.availableTournaments) {
+          elements.availableTournaments.style.display = 'none';
+        }
+        
+        // Display a loading spinner or message while we wait for server response
+        if (modules.ui && modules.ui.showLoading) {
+          modules.ui.showLoading(elements.tournamentPlayers);
+        }
+        
+        return true;
+      }
+      
+      return false;
+    }
+
+    /**
+     * Send player ready status to server
+     */
+    function sendPlayerReady() {
+      if (!isInTournament()) {
+        console.warn("Can't send ready status: not in a tournament");
+        return false;
+      }
+      
+      if (modules.websocket && modules.websocket.isConnected()) {
+        // Show waiting status
+        showTournamentStatus("Waiting for other players to be ready...");
+        
+        // Hide ready button to prevent repeated clicks
+        showReadySection(false);
+        
+        // Send ready status to server
+        return modules.websocket.send({
+          type: "tournament_player_ready"
+        });
+      }
+      
+      return false;
+    }
+
+    /**
+     * Update the match ready UI after a match
+     * @param {boolean} show - Whether to show the ready UI
+     */
+    function updateMatchReadyUI(show) {
+      // Show/hide ready section
+      showReadySection(show);
+      
+      // Reset status notification if hiding
+      if (!show) {
+        hideTournamentStatus();
+      }
+    }
+
+    /**
+     * Enhanced method to handle match ready event
+     * @param {string} message - Server message
+     */
+    function handleMatchReady(message) {
+      console.log("Match ready:", message);
+      
+      // Hide waiting overlay if it exists
+      hideWaitingOverlay();
+      
+      // Hide ready section since we're about to start a match
+      showReadySection(false);
+      
+      // Update status with success message
+      showTournamentStatus("Your match is starting!", "success");
+      
+      // Show toast notification
+      if (typeof Utils !== 'undefined' && Utils.showToast) {
+        Utils.showToast(message || "Your match is starting!", "success");
+      }
+      
+      // Store tournament ID in localStorage for recovery
+      if (currentTournament && currentTournament.id) {
+        try {
+          localStorage.setItem('activeTournamentId', currentTournament.id);
+        } catch (e) {
+          console.warn("Could not save tournament ID to localStorage", e);
+        }
+      }
+    }
+
+    // Extend the handleTournamentUpdate function to add support for the ready UI
+    // Save original function
+    const originalHandleTournamentUpdate = handleTournamentUpdate;
+
+    // Override with enhanced version
+    handleTournamentUpdate = function(tournament) {
+      // Call original function
+      originalHandleTournamentUpdate.call(this, tournament);
+      
+      // Check if the tournament has started and this player should show ready button
+      if (tournament && tournament.started) {
+        // Show ready section if player is in tournament but not in current match
+        const playerIsInCurrentMatch = tournament.current_match && 
+          (tournament.current_match.player1 === currentNickname || 
+          tournament.current_match.player2 === currentNickname);
+        
+        // If player is not in current match, show ready section
+        if (!playerIsInCurrentMatch) {
+          // Player should see ready button if:
+          // 1. There is a current match (tournament is active)
+          // 2. Player is not in the current match (waiting for their turn)
+          const shouldShowReadyButton = tournament.current_match !== null;
+          
+          // Update ready UI
+          updateMatchReadyUI(shouldShowReadyButton);
+        } else {
+          // If player is in current match, hide ready section
+          updateMatchReadyUI(false);
+        }
+      } else {
+        // Tournament hasn't started, hide ready section
+        updateMatchReadyUI(false);
+      }
+    };
     
     // Public API
     return {
@@ -956,8 +1164,17 @@ const TournamentManager = (function() {
       createTournament,
       joinTournament,
       leaveTournament,
-      startTournament
-    };
+      startTournament,
+      recoverActiveTournament,
+      sendPlayerReady,
+      updateMatchReadyUI,
+      showReadySection,
+      showTournamentStatus,
+      hideTournamentStatus,
+      showWaitingForNextMatch,
+      hideWaitingOverlay,
+      handleMatchReady
+        };
   })();
   
   // Export for ES modules
