@@ -1540,44 +1540,69 @@ const App = (function() {
      * @returns {Promise<Object>} - Server response
      */
     async function recordGameResult(nickname, token, score, totalRounds) {
-    try {
-        // Get CSRF token first
-        const csrfResponse = await fetch(`${getApiBaseUrl()}/csrf/`, {
-            method: 'GET',
-            credentials: 'include'
-        });
-        const csrfData = await csrfResponse.json();
-        const csrfToken = csrfData.csrfToken;
-        
-        console.log("Got CSRF token:", csrfToken);
-        
-        // Now make the end_game request with the fresh token
-        const apiUrl = getApiBaseUrl();
-        const response = await fetch(`${apiUrl}/end_game/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'X-CSRFToken': csrfToken
-            },
-            credentials: 'include',
-            body: JSON.stringify({
-                nickname,
-                token,
-                score,
-                totalRounds
-            })
-        });
-        
-        if (!response.ok) {
-            throw new Error(`Server responded with ${response.status}: ${response.statusText}`);
+        try {
+            // Get CSRF token first
+            const csrfResponse = await fetch(`${getApiBaseUrl()}/csrf/`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+            
+            if (!csrfResponse.ok) {
+                throw new Error(`CSRF token request failed: ${csrfResponse.status} ${csrfResponse.statusText}`);
+            }
+            
+            const csrfData = await csrfResponse.json();
+            const csrfToken = csrfData.csrfToken;
+            
+            console.log("Got CSRF token:", csrfToken);
+            
+            // Ensure the CSRF cookie is set
+            document.cookie = `csrftoken=${csrfToken}; path=/; SameSite=Lax`;
+            
+            // Now make the end_game request with the fresh token
+            const apiUrl = getApiBaseUrl();
+            const response = await fetch(`${apiUrl}/end_game/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRFToken': csrfToken
+                },
+                credentials: 'include',
+                body: JSON.stringify({
+                    nickname,
+                    token,
+                    score,
+                    totalRounds
+                })
+            });
+            
+            // More detailed error handling
+            if (!response.ok) {
+                console.error(`Request failed: ${response.status} ${response.statusText}`);
+                console.error('Request details:', {
+                    url: `${apiUrl}/end_game/`,
+                    nickname,
+                    score,
+                    totalRounds,
+                    csrfToken: csrfToken.substring(0, 10) + '...' // Show part of token for debugging
+                });
+                
+                let errorMessage;
+                try {
+                    const errorData = await response.json();
+                    errorMessage = errorData.error || `${response.status}: ${response.statusText}`;
+                } catch (e) {
+                    errorMessage = `${response.status}: ${response.statusText}`;
+                }
+                throw new Error(`Server responded with ${errorMessage}`);
+            }
+            
+            return await response.json();
+        } catch (error) {
+            console.error('Error recording game result:', error);
+            throw error;
         }
-        
-        return await response.json();
-    } catch (error) {
-        console.error('Error recording game result:', error);
-        throw error;
     }
-}
     
     /**
      * Update the leaderboard with latest player data
@@ -2020,41 +2045,42 @@ const App = (function() {
     }
     
     /**
-     * Exit fullscreen mode
-     * @returns {Promise} - Promise that resolves when fullscreen ends
-     */
-    function exitFullscreen() {
-        // Use Utils if available
-        if (window.Utils && Utils.exitFullscreen) {
-            return Utils.exitFullscreen();
-        }
-        
-        // Fallback implementation
-        if (!document.fullscreenElement && 
-            !document.webkitFullscreenElement && 
-            !document.mozFullScreenElement && 
-            !document.msFullscreenElement) {
-            // Already not in fullscreen
-            return Promise.resolve();
-        }
-        
+ * Exit fullscreen mode safely
+ * @returns {Promise} - Promise that resolves when fullscreen ends
+ */
+function exitFullscreen() {
+    // Return immediately if already not in fullscreen
+    if (!document.fullscreenElement && 
+        !document.webkitFullscreenElement && 
+        !document.mozFullScreenElement && 
+        !document.msFullscreenElement) {
+        return Promise.resolve();
+    }
+    
+    return new Promise((resolve, reject) => {
         try {
-            if (document.exitFullscreen) {
-                return document.exitFullscreen();
-            } else if (document.webkitExitFullscreen) {
-                return document.webkitExitFullscreen();
-            } else if (document.mozCancelFullScreen) {
-                return document.mozCancelFullScreen();
-            } else if (document.msExitFullscreen) {
-                return document.msExitFullscreen();
+            // Define the function to be executed
+            const exitFunction = document.exitFullscreen || 
+                                 document.webkitExitFullscreen || 
+                                 document.mozCancelFullScreen || 
+                                 document.msExitFullscreen;
+            
+            // Check if document is active before attempting to exit fullscreen
+            if (document.visibilityState === 'visible' && exitFunction) {
+                exitFunction.call(document);
+                resolve();
+            } else {
+                // If document not active or no exit function, just resolve without error
+                console.log('Skipping fullscreen exit - document not active or function not available');
+                resolve();
             }
         } catch (error) {
-            console.error('Error exiting fullscreen:', error);
-            return Promise.reject(error);
+            // Log error but don't reject - allows code to continue
+            console.warn('Error during fullscreen exit:', error);
+            resolve(); // Resolve anyway to prevent disrupting the flow
         }
-        
-        return Promise.reject(new Error('Fullscreen exit not supported'));
-    }
+    });
+}
     
     /**
      * Show a loading spinner in an element
