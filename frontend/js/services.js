@@ -299,10 +299,10 @@ const ErrorHandler = (function() {
       //     return '';
       //   }
       // };
-      // Force stringification by logging dummy object.
-      console.log(dummy);
+      // // Force stringification by logging dummy object.
+      // console.log(dummy);
 
-      // Combine results from all methods.
+      // // Combine results from all methods.
       const detected = debuggerDetected || toStringDetected;
       isDevToolsOpen = detected;
       return detected;
