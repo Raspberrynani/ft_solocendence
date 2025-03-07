@@ -380,23 +380,118 @@ class GameManager:
             
             return False
     
-    def handle_game_over(self, game):
-        """Handle game over event"""
-        # This method will be called when a game ends
-        # We'll keep the game instance for a short while to allow final state retrieval
-        logger.info(f"Game over: room={game.room_id}, winner={game.winner}")
-        
-        # Schedule cleanup after a delay (would use proper cleanup mechanism in production)
-        def delayed_cleanup():
-            time.sleep(5)  # 5 second delay before cleanup
-            with self.lock:
-                if game.room_id in self.active_games:
-                    del self.active_games[game.room_id]
-        
-        # Start cleanup thread
-        cleanup_thread = threading.Thread(target=delayed_cleanup)
-        cleanup_thread.daemon = True
-        cleanup_thread.start()
+    async def handle_game_over(self, data):
+    # This is now handled by the server game logic
+    # But we'll enhance tournament integration
+        game_room = active_games.get(self.channel_name)
+        if game_room:
+            # Check if this game was part of a tournament
+            if self.channel_name in tournament_players:
+                tournament_id = tournament_players[self.channel_name]
+                tournament = active_tournaments.get(tournament_id)
+                
+                if tournament and tournament.current_match:
+                    logger.info(f"Tournament match completed in tournament {tournament_id}")
+                    
+                    # Record match result
+                    if tournament.record_match_result(self.channel_name):
+                        logger.info(f"Match result recorded, winner: {self.channel_name}")
+                        
+                        # Notify all tournament players of the update
+                        for player in tournament.players:
+                            try:
+                                await self.channel_layer.send(
+                                    player["channel"],
+                                    {
+                                        "type": "tournament_update",
+                                        "tournament": tournament.get_state()
+                                    }
+                                )
+                            except Exception as e:
+                                logger.error(f"Error sending tournament update: {e}")
+                        
+                        # If there's a next match, schedule it with a delay for synchronization
+                        if tournament.current_match:
+                            player1 = tournament.current_match["player1"]
+                            player2 = tournament.current_match["player2"]
+                            
+                            logger.info(f"Scheduling next match with delay: {player1['nickname']} vs {player2['nickname']}")
+                            
+                            # Add a delay before starting the next match to allow for UI transitions
+                            await asyncio.sleep(5)  # 5 second delay
+                            
+                            # Create a new game room for this match
+                            tourney_game_room = "tourney_game_" + str(uuid.uuid4())
+                            
+                            # Create server-side game
+                            game = game_manager.create_game(tourney_game_room, target_rounds=tournament.rounds)
+                            
+                            # Add players to the game
+                            game_manager.add_player_to_game(tourney_game_room, player1["channel"], "left")
+                            game_manager.add_player_to_game(tourney_game_room, player2["channel"], "right")
+                            
+                            # Add to channel group
+                            await self.channel_layer.group_add(tourney_game_room, player1["channel"])
+                            await self.channel_layer.group_add(tourney_game_room, player2["channel"])
+                            
+                            # Store room mapping
+                            active_games[player1["channel"]] = tourney_game_room
+                            active_games[player2["channel"]] = tourney_game_room
+                            
+                            # Start the game
+                            game_manager.start_game(tourney_game_room)
+                            
+                            # Set up state sync loop for this game
+                            asyncio.create_task(self.game_sync_loop(tourney_game_room))
+                            
+                            # Send a pre-match notification to players
+                            pre_match_message = f"Your tournament match is about to begin: {player1['nickname']} vs {player2['nickname']}"
+                            
+                            await self.channel_layer.send(
+                                player1["channel"],
+                                {
+                                    "type": "tournament_match_ready",
+                                    "message": pre_match_message
+                                }
+                            )
+                            
+                            await self.channel_layer.send(
+                                player2["channel"],
+                                {
+                                    "type": "tournament_match_ready",
+                                    "message": pre_match_message
+                                }
+                            )
+                            
+                            # Add another delay for players to see the notification
+                            await asyncio.sleep(2)
+                            
+                            # Now start the match
+                            match_message = f"Tournament match: {player1['nickname']} vs {player2['nickname']}"
+                            
+                            await self.channel_layer.send(
+                                player1["channel"],
+                                {
+                                    "type": "start_game",
+                                    "message": match_message,
+                                    "room": tourney_game_room,
+                                    "rounds": tournament.rounds,
+                                    "is_tournament": True,
+                                    "player_side": "left"
+                                }
+                            )
+                            
+                            await self.channel_layer.send(
+                                player2["channel"],
+                                {
+                                    "type": "start_game",
+                                    "message": match_message,
+                                    "room": tourney_game_room,
+                                    "rounds": tournament.rounds,
+                                    "is_tournament": True,
+                                    "player_side": "right"
+                                }
+                            )
 
 
 # Create a global game manager instance
@@ -525,6 +620,10 @@ class Tournament:
         # Advance to next match
         return self.advance_tournament()
     
+    def player_ready(self, channel):
+        return True
+    """hack for tournament match ready"""
+    
     def get_state(self):
         """Get the current state of the tournament"""
         current_match_data = None
@@ -582,6 +681,15 @@ class PongConsumer(AsyncWebsocketConsumer):
         
         # Send active tournaments list
         await self.broadcast_tournament_list()
+        
+    async def tournament_match_ready(self, event):
+        message = event.get("message", "Your tournament match is about to begin")
+        logger.debug(f"Sending tournament match ready message: {message}")
+        
+        await self.send(text_data=json.dumps({
+            "type": "tournament_match_ready",
+            "message": message
+        }))
         
 
     async def disconnect(self, close_code):

@@ -41,7 +41,106 @@ const TournamentManager = (function() {
       console.log("TournamentManager initialized successfully");
       return true;
     }
+
+    /**
+     * Show match waiting screen between tournament matches
+     * @param {boolean} playerWon - Whether the current player won the last match
+     */
+    function showMatchWaitingScreen(playerWon) {
+      console.log("Showing tournament match waiting screen");
+      
+      // Create the waiting screen if it doesn't exist
+      let waitingScreen = document.getElementById('tournament-waiting-screen');
+      if (!waitingScreen) {
+          waitingScreen = document.createElement('div');
+          waitingScreen.id = 'tournament-waiting-screen';
+          waitingScreen.className = 'tournament-waiting-screen';
+          waitingScreen.style.cssText = `
+              position: fixed;
+              top: 0;
+              left: 0;
+              width: 100%;
+              height: 100%;
+              background: rgba(0, 0, 0, 0.8);
+              display: flex;
+              flex-direction: column;
+              justify-content: center;
+              align-items: center;
+              z-index: 1000;
+              color: white;
+              text-align: center;
+          `;
+          
+          // Create content
+          const content = document.createElement('div');
+          content.innerHTML = `
+              <h2>${playerWon ? '🏆 Victory! 🏆' : 'Match Complete'}</h2>
+              <p class="match-result">${playerWon ? 
+                  'Congratulations! You won this match!' : 
+                  'This match is complete.'}</p>
+              <div class="waiting-message mt-4">
+                  <p>Waiting for next tournament match...</p>
+                  <div class="next-match-countdown mt-3">
+                      <p>Next match starts in: <span id="match-countdown">10</span></p>
+                  </div>
+              </div>
+              <div class="tournament-status mt-4">
+                  <p>Tournament in progress. Please don't navigate away.</p>
+              </div>
+          `;
+          
+          waitingScreen.appendChild(content);
+          document.body.appendChild(waitingScreen);
+          
+          // Start countdown
+          startMatchCountdown(10);
+      } else {
+          // Update existing waiting screen
+          const resultElement = waitingScreen.querySelector('.match-result');
+          if (resultElement) {
+              resultElement.textContent = playerWon ? 
+                  'Congratulations! You won this match!' : 
+                  'This match is complete.';
+          }
+          
+          // Show the waiting screen
+          waitingScreen.style.display = 'flex';
+          
+          // Restart countdown
+          startMatchCountdown(10);
+      }
+    }
     
+    
+    /**
+     * Handle tournament match ready notification
+     * @param {string} message - Ready message
+     */
+    function handleMatchReady(message) {
+      console.log("Tournament match ready:", message);
+      
+      // Hide any waiting screens
+      hideMatchWaitingScreen();
+      
+      // Focus the browser tab if possible
+      if ('focus' in window) {
+        window.focus();
+      }
+      
+      // Flash the browser tab if not focused
+      if (document.hidden && 'Notification' in window && Notification.permission === 'granted') {
+        // Try to use notifications if available and permitted
+        try {
+          new Notification('Tournament Match Ready', {
+            body: message || 'Your tournament match is about to begin!',
+            icon: '/favicon.ico'
+          });
+        } catch (e) {
+          console.log("Could not show notification:", e);
+        }
+      }
+    }
+
     /**
      * Set up event listeners for tournament controls
      */
@@ -89,6 +188,41 @@ const TournamentManager = (function() {
             showError("No active tournament");
           }
         });
+      }
+    }
+
+    /**
+     * Start countdown for next match
+     * @param {number} seconds - Seconds to count down
+     */
+    function startMatchCountdown(seconds) {
+      const countdownElement = document.getElementById('match-countdown');
+      if (!countdownElement) return;
+      
+      let count = seconds;
+      countdownElement.textContent = count;
+      
+      const interval = setInterval(() => {
+          count--;
+          if (countdownElement) {
+              countdownElement.textContent = count;
+          }
+          
+          if (count <= 0) {
+              clearInterval(interval);
+              // Hide waiting screen once countdown is complete
+              hideMatchWaitingScreen();
+          }
+      }, 1000);
+    }
+
+    /**
+    * Hide match waiting screen
+    */
+    function hideMatchWaitingScreen() {
+      const waitingScreen = document.getElementById('tournament-waiting-screen');
+      if (waitingScreen) {
+          waitingScreen.style.display = 'none';
       }
     }
     
@@ -471,6 +605,67 @@ const TournamentManager = (function() {
     }
     
     /**
+     * Complete tournament cleanup
+     */
+    function completeTournamentCleanup() {
+      // Reset tournament state
+      resetTournamentState();
+      
+      // Clear any UI elements
+      if (window.UIManager && typeof UIManager.cleanupTournamentUI === 'function') {
+        UIManager.cleanupTournamentUI();
+      }
+      
+      // Clear localStorage flag for tournament
+      try {
+        localStorage.setItem('inTournament', 'false');
+      } catch (e) {
+        console.warn("Could not access localStorage", e);
+      }
+    }
+
+    /**
+     * Show tournament completion screen
+     * @param {boolean} isWinner - Whether current player is the tournament winner
+     */
+    function showTournamentCompletionScreen(isWinner) {
+      // Create tournament completion screen
+      const screen = document.createElement('div');
+      screen.className = isWinner ? 'result-screen winner' : 'result-screen loser';
+      
+      let content = '';
+      if (isWinner) {
+        content = `
+          <h2>🏆 TOURNAMENT VICTORY! 🏆</h2>
+          <h3>You won the tournament!</h3>
+          <button class="button" id="continue-button">CONTINUE</button>
+        `;
+      } else {
+        content = `
+          <h2>TOURNAMENT COMPLETE</h2>
+          <h3>Thank you for participating!</h3>
+          <button class="button" id="continue-button">BACK TO MENU</button>
+        `;
+      }
+      
+      screen.innerHTML = content;
+      document.body.appendChild(screen);
+      
+      // Add button handler
+      document.getElementById('continue-button').addEventListener('click', function() {
+        screen.remove();
+        
+        // Complete cleanup
+        completeTournamentCleanup();
+        
+        // Navigate back to menu
+        if (window.UIManager && typeof UIManager.navigateTo === 'function') {
+          UIManager.navigateTo('game-page');
+        }
+      });
+    }
+
+    /**
      * Get the current tournament ID
      * @returns {string|null} - Tournament ID or null
      */
@@ -594,18 +789,30 @@ const TournamentManager = (function() {
     function handleTournamentLeft() {
       console.log("Left tournament");
       resetTournamentState();
-
+  
       // Hide leave warning when exiting a tournament
       const tournamentLeaveWarning = document.getElementById('tournament-leave-warning');
       if (tournamentLeaveWarning) {
           tournamentLeaveWarning.style.display = 'none';
       }
       
+      // Remove any tournament waiting screens
+      const waitingScreen = document.getElementById('tournament-waiting-screen');
+      if (waitingScreen) {
+          waitingScreen.remove();
+      }
+      
+      // Clear any tournament-related banners
+      const banner = document.getElementById('tournament-warning-banner');
+      if (banner) {
+          banner.style.display = 'none';
+      }
+      
       // Show toast notification if Utils is available
       if (typeof Utils !== 'undefined' && Utils.showToast) {
-        Utils.showToast("You have left the tournament", "info");
+          Utils.showToast("You have left the tournament", "info");
       }
-    }
+  }
     
     /**
      * Handle tournament errors

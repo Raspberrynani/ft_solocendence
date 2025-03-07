@@ -825,10 +825,12 @@ const App = (function() {
                 
                 // Navigate back to game page where tournament UI is
                 setTimeout(() => {
-                    showToast('Tournament match completed! Waiting for next match...', 'info');
-                    
                     if (modules.ui) {
-                        modules.ui.navigateTo('game-page');
+                        // Navigate to tournament page instead of game page
+                        modules.ui.navigateTo('tournament-page');
+                        
+                        // Show waiting message
+                        showTournamentMatchComplete(winner, state.game.playerSide);
                     }
                 }, 500);
             } else {
@@ -877,6 +879,28 @@ const App = (function() {
             }
         } else {
             console.log('No definitive winner yet - continuing game');
+        }
+    }
+
+    /**
+     * Show tournament match complete message
+     * @param {string} winner - Winner of the match
+     * @param {string} playerSide - Side the player is on
+     */
+    function showTournamentMatchComplete(winner, playerSide) {
+        // Determine if current player won based on playerSide
+        const playerWon = (playerSide === 'left' && winner === 'left') || 
+                         (playerSide === 'right' && winner === 'right');
+        
+        if (playerWon) {
+            showToast('You won this match! Waiting for next match...', 'success');
+        } else {
+            showToast('Match complete. Waiting for tournament to continue...', 'info');
+        }
+        
+        // If tournament manager exists, tell it to show match waiting screen
+        if (window.TournamentManager && typeof TournamentManager.showMatchWaitingScreen === 'function') {
+            TournamentManager.showMatchWaitingScreen(playerWon);
         }
     }
     

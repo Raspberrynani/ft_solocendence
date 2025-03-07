@@ -196,6 +196,24 @@
         return true;
     }
     
+    /**
+     * Clear all tournament warnings and banners
+     */
+    function clearAllTournamentWarnings() {
+        // Clear warning banner
+        const banner = document.getElementById('tournament-warning-banner');
+        if (banner) {
+        banner.style.display = 'none';
+        }
+        
+        // Clear warning message
+        const warningElement = document.getElementById('tournament-leave-warning');
+        if (warningElement) {
+        warningElement.style.display = 'none';
+        }
+    }
+    
+
     // ----- UI ELEMENTS -----
     
     // We'll add UI elements after the DOM is ready

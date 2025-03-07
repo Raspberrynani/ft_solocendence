@@ -593,6 +593,28 @@ const UIManager = (function() {
         }
       }, 300);
     }
+
+    /**
+     * Clean up tournament UI elements
+     */
+    function cleanupTournamentUI() {
+      // Clear any tournament warnings
+      if (window.clearAllTournamentWarnings) {
+        clearAllTournamentWarnings();
+      }
+      
+      // Remove any tournament waiting screens
+      const waitingScreen = document.getElementById('tournament-waiting-screen');
+      if (waitingScreen) {
+        waitingScreen.remove();
+      }
+      
+      // Clear any tournament banners
+      const tournamentBanner = document.getElementById('tournament-warning-banner');
+      if (tournamentBanner) {
+        tournamentBanner.style.display = 'none';
+      }
+    }
     
     // Public API
     return {

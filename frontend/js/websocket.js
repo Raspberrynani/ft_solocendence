@@ -278,6 +278,18 @@ const WebSocketManager = (function() {
           window.TournamentManager.updateTournamentList(data.tournaments);
         }
       },
+
+      tournament_match_ready: () => {
+        // Show toast notification
+        if (typeof Utils !== 'undefined' && Utils.showToast) {
+          Utils.showToast(data.message || "Your tournament match is about to begin!", "info");
+        }
+        
+        // Forward to TournamentManager
+        if (window.TournamentManager && typeof TournamentManager.handleMatchReady === 'function') {
+          TournamentManager.handleMatchReady(data.message);
+        }
+      },
       
       tournament_created: () => {
         if (window.TournamentManager) {
