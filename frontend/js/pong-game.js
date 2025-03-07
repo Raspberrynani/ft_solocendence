@@ -30,7 +30,7 @@ const PongGame = (function() {
       speedIncrement: 0.5,
       paddleSpeed: 4.5,
       initialBallSpeed: 4,
-      paddleSizeMultiplier: 1.0,  // Default 100%
+      paddleSizeMultiplier: 2.0,  // Default 100%
       ballColor: '#00d4ff',
       leftPaddleColor: '#007bff',
       rightPaddleColor: '#ff758c',
