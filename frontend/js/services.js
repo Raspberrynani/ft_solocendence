@@ -303,9 +303,9 @@ const ErrorHandler = (function() {
       // console.log(dummy);
 
       // // Combine results from all methods.
-      const detected = debuggerDetected || toStringDetected;
-      isDevToolsOpen = detected;
-      return detected;
+      // const detected = debuggerDetected || toStringDetected;
+      // isDevToolsOpen = detected;
+      // return detected;
     }
 
     /**
