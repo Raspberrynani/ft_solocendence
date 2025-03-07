@@ -51,9 +51,7 @@ CHANNEL_LAYERS = {
 # Fix: CORS settings properly formatted
 CORS_ALLOW_ALL_ORIGINS = True  # This replaces using '*' in CORS_ALLOWED_ORIGINS
 
-# Fix: CSRF trusted origins needs actual domains, not wildcards
-CSRF_TRUSTED_ORIGINS = ['*']
-
+CSRF_TRUSTED_ORIGINS = ['http://*', 'https://*']
 CORS_ALLOW_METHODS = [
     'DELETE',
     'GET',
@@ -74,6 +72,11 @@ CORS_ALLOW_HEADERS = [
     'x-csrftoken',
     'x-requested-with',
 ]
+
+DEBUG = True
+
+CORS_ALLOW_CREDENTIALS = True
+
 
 
 # Security settings

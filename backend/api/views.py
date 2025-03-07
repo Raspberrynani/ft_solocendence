@@ -20,6 +20,7 @@ def get_csrf_token(request):
     """
     token = get_token(request)
     response = JsonResponse({'csrfToken': token})
+    response['Access-Control-Allow-Origin'] = '*'
     # Make sure we're sending the CSRF token with proper headers
     response['X-CSRFToken'] = token
     return response
