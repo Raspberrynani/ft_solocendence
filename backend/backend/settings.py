@@ -69,7 +69,6 @@ CORS_ALLOWED_ORIGINS = [
 CSRF_TRUSTED_ORIGINS = [
     "https://localhost:8444",
     "https://127.0.0.1:8444",
-    "*",
 ]
 
 CORS_ALLOW_METHODS = [
