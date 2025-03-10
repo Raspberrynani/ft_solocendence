@@ -567,16 +567,25 @@ const App = (function() {
     function handlePageChange(pageId) {
         console.log(`Page changed to: ${pageId}`);
         
+        // NEW CODE: If leaving the pong page and we were waiting in queue, leave queue
+        if (pageId !== 'pong-page' && state.game.isMultiplayer && 
+            !state.game.active && !state.game.isTournament) {
+          if (modules.websocket && typeof modules.websocket.leaveQueue === 'function') {
+            console.log('Leaving queue due to page navigation');
+            modules.websocket.leaveQueue();
+          }
+        }
+        
         if (pageId === 'leaderboard-page') {
-            updateLeaderboard();
+          updateLeaderboard();
         } else if (pageId === 'privacy-policy-page') {
-            // Ensure GDPR Manager is initialized
-            if (modules.gdpr && modules.gdpr.init) {
-                modules.gdpr.init();
-            }
+          // Ensure GDPR Manager is initialized
+          if (modules.gdpr && modules.gdpr.init) {
+            modules.gdpr.init();
+          }
         } else if (pageId === 'tournament-page') {
-            // Initialize tournament page
-            initTournamentPage();
+          // Initialize tournament page
+          initTournamentPage();
         }
     }
     
@@ -1298,6 +1307,14 @@ async function endPongGame() {
     
     // Mark game as inactive
     state.game.active = false;
+
+    if (state.game.isMultiplayer && !state.game.isTournament) {
+        // Check if the WebSocket manager has the leaveQueue method
+        if (modules.websocket && typeof modules.websocket.leaveQueue === 'function') {
+          console.log('Leaving queue via WebSocket');
+          modules.websocket.leaveQueue();
+        }
+    }
     
     // Store tournament flag before we clean up
     const wasInTournament = state.game.isTournament;

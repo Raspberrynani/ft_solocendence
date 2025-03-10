@@ -399,6 +399,23 @@ const WebSocketManager = (function() {
       rounds: rounds || 3
     });
   }
+
+  /**
+   * Leave the game queue
+   * @returns {boolean} - Success status
+   */
+  function leaveQueue() {
+    if (!isConnected) {
+      if (gameCallbacks.onError) {
+        gameCallbacks.onError("Not connected to server");
+      }
+      return false;
+    }
+    
+    return send({
+      type: "leave_queue"
+    });
+  }
   
   /**
    * Send paddle position update with throttling
@@ -529,6 +546,7 @@ const WebSocketManager = (function() {
   return {
     init,
     joinQueue,
+    leaveQueue,
     sendPaddleUpdate,
     sendGameOver,
     onWaitingListUpdate,

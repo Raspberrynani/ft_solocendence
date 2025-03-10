@@ -903,6 +903,26 @@ class PongConsumer(AsyncWebsocketConsumer):
                         "tournament": tournament.get_state()
                     }))
             
+            elif msg_type == "leave_queue":
+                
+                # Now use waiting_players
+                # Find and remove player from waiting list
+                waiting_players[:] = [p for p in waiting_players if p["channel"] != self.channel_name]
+                logger.info(f"Player {self.channel_name} left the queue")
+                
+                # Update the waiting list count metric if using metrics
+                if len(waiting_players) > 0:
+                    WAITING_PLAYERS.dec()
+                
+                # Send confirmation to client
+                await self.send(text_data=json.dumps({
+                    "type": "queue_update",
+                    "message": "You have left the queue"
+                }))
+                
+                # Broadcast updated waiting list to everyone in the lobby
+                await self.broadcast_waiting_list()
+            
             elif msg_type == "request_final_match":
                 tournament_id = data.get("tournament_id")
                 

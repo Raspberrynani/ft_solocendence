@@ -18,5 +18,12 @@ COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 RUN pip install daphne django-sslserver psycopg2-binary
 
-# Note: The start.sh script will be mounted from the host
+# Copy the population script
+COPY populate_db.py .
+
+# Copy the start script and make it executable
+COPY start.sh .
+RUN chmod +x start.sh
+
+# Run the start script on container startup
 CMD ["/bin/bash", "start.sh"]

@@ -12,6 +12,10 @@ echo "PostgreSQL is ready!"
 echo "Running migrations..."
 python manage.py migrate
 
+# Populate database with fake players for demo
+echo "Populating database with demo data..."
+python populate_db.py
+
 # Start server with or without SSL
 if [ "$SSL_ENABLED" = "true" ]; then
   echo "Starting with SSL on port 8443"
