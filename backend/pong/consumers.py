@@ -154,55 +154,100 @@ class Tournament:
             # This is implemented by creating fewer first-round matches
             first_round_matches = (player_count - byes_needed) // 2
         
-        # Create first round matches
-        match_id = 0
-        for i in range(first_round_matches):
-            player1 = players[i * 2]
-            player2 = players[i * 2 + 1]
-            
-            self.matches.append({
-                "id": match_id,
-                "round": 0,  # First round (0-indexed)
-                "position": i,  # Position in the round
-                "player1": player1["nickname"],
-                "player2": player2["nickname"],
-                "player1_channel": player1["channel"],
-                "player2_channel": player2["channel"],
-                "winner": None,
-                "next_match": self.calculate_next_match(0, i, first_round_matches)
-            })
-            match_id += 1
+        # Track all matches we need to create (round, position)
+        matches_to_create = []
+        final_round = rounds - 1  # 0-indexed
         
-        # If we have byes, create "virtual matches" for second round
-        if first_round_matches < player_count // 2:
-            bye_players = players[first_round_matches * 2:]
-            second_round_positions = player_count // 4
+        # First determine all match positions needed in bracket
+        for round_num in range(rounds):
+            matches_in_round = 2 ** (rounds - round_num - 1)
+            for position in range(matches_in_round):
+                matches_to_create.append((round_num, position))
+        
+        # Sort by round so we create them in order
+        matches_to_create.sort(key=lambda x: x[0])
+        
+        # Create all matches, starting with round 0
+        match_id = 0
+        for round_num, position in matches_to_create:
+            # Determine if this is a first-round match
+            is_first_round = (round_num == 0)
             
-            for i, player in enumerate(bye_players):
-                # Calculate position in second round
-                position = i // 2
+            if is_first_round and position < first_round_matches:
+                # First round match with assigned players
+                player1_idx = position * 2
+                player2_idx = position * 2 + 1
                 
-                # Check if we need to create a new match or add to existing one
-                existing_match = next((m for m in self.matches if m["round"] == 1 and m["position"] == position), None)
-                
-                if existing_match:
-                    # Add as second player to existing match
-                    existing_match["player2"] = player["nickname"]
-                    existing_match["player2_channel"] = player["channel"]
-                else:
-                    # Create new match with this player
+                if player1_idx < len(players) and player2_idx < len(players):
+                    player1 = players[player1_idx]
+                    player2 = players[player2_idx]
+                    
                     self.matches.append({
                         "id": match_id,
-                        "round": 1,  # Second round (0-indexed)
+                        "round": round_num,
                         "position": position,
-                        "player1": player["nickname"],
-                        "player2": None,  # Will be filled by winner of a first-round match
-                        "player1_channel": player["channel"],
+                        "player1": player1["nickname"],
+                        "player2": player2["nickname"],
+                        "player1_channel": player1["channel"],
+                        "player2_channel": player2["channel"],
+                        "winner": None,
+                        "next_match": self.calculate_next_match(round_num, position, first_round_matches)
+                    })
+                else:
+                    # This shouldn't happen, but handle it gracefully
+                    self.matches.append({
+                        "id": match_id,
+                        "round": round_num,
+                        "position": position,
+                        "player1": "TBD",
+                        "player2": "TBD",
+                        "player1_channel": None,
                         "player2_channel": None,
                         "winner": None,
-                        "next_match": self.calculate_next_match(1, position, second_round_positions)
+                        "next_match": self.calculate_next_match(round_num, position, first_round_matches)
                     })
-                    match_id += 1
+            else:
+                # Higher round match (including final) - will be filled later
+                # For 4 players, this includes the final match (round 1, position 0)
+                next_match = None
+                if round_num < final_round:
+                    matches_in_this_round = 2 ** (rounds - round_num - 1)
+                    next_match = self.calculate_next_match(round_num, position, matches_in_this_round)
+                
+                self.matches.append({
+                    "id": match_id,
+                    "round": round_num,
+                    "position": position,
+                    "player1": None,  # Will be filled by winner of previous match
+                    "player2": None,  # Will be filled by winner of previous match
+                    "player1_channel": None,
+                    "player2_channel": None,
+                    "winner": None,
+                    "next_match": next_match
+                })
+            
+            match_id += 1
+        
+        # Special handling for byes - check if we have players who get byes
+        if player_count & (player_count - 1) != 0:  # Not a power of 2
+            bye_players = players[first_round_matches * 2:]
+            for i, player in enumerate(bye_players):
+                # Calculate position in second round
+                round_idx = 1  # Second round (0-indexed)
+                position = i // 2
+                
+                # Find the corresponding match in the second round
+                second_round_match = next((m for m in self.matches 
+                                        if m["round"] == round_idx and m["position"] == position), None)
+                
+                if second_round_match:
+                    # Add player to first or second slot
+                    if second_round_match["player1"] is None:
+                        second_round_match["player1"] = player["nickname"]
+                        second_round_match["player1_channel"] = player["channel"]
+                    else:
+                        second_round_match["player2"] = player["nickname"]
+                        second_round_match["player2_channel"] = player["channel"]
     
     def calculate_next_match(self, current_round, position, matches_in_round):
         """Calculate the ID of the next match in the bracket"""
@@ -228,19 +273,26 @@ class Tournament:
             # - First round matches are done
             # - Final match should be created but hasn't been activated
             
+            # Find the final round by checking bracket depth
+            final_round = math.ceil(math.log2(len(self.players))) - 1
+            
             # Find matches where both players are known but winner is None
             final_matches = [m for m in self.matches 
-                        if m["next_match"] is None and m["winner"] is None]
+                        if m["round"] == final_round and m["winner"] is None
+                        and m["player1"] and m["player2"]
+                        and m["player1_channel"] and m["player2_channel"]]
                         
             # If we have a potential final match that's ready to play
-            if final_matches and len(final_matches) == 1 and final_matches[0]["player1"] and final_matches[0]["player2"]:
+            if final_matches and len(final_matches) == 1:
                 next_match = final_matches[0]
                 logger.info(f"Found final match ready to play: {next_match['player1']} vs {next_match['player2']}")
         
         if not next_match:
             # Tournament is complete or no valid next match
             # Find the winner (winner of the final match)
-            final_match = next((m for m in self.matches if m["next_match"] is None and m["winner"] is not None), None)
+            final_round = math.ceil(math.log2(len(self.players))) - 1
+            final_match = next((m for m in self.matches 
+                            if m["round"] == final_round and m["winner"] is not None), None)
             if final_match:
                 self.winner = final_match["winner"]
             
