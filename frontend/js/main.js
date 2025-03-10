@@ -655,7 +655,7 @@ const App = (function() {
         
         // Clear status
         if (elements.pongStatus) {
-            elements.pongStatus.innerText = '';
+            elements.pongStatus.innerText = isTournament ? 'Tournament Match' : '';
         }
         
         // Set rounds
@@ -669,15 +669,10 @@ const App = (function() {
         // Set tournament game flag
         state.game.isTournament = isTournament;
         
-        // IMPORTANT: For tournament games, ALWAYS ensure multiplayer is enabled
+        // IMPORTANT: For tournament games, always enable multiplayer
         if (isTournament) {
             console.log('Tournament game starting - enabling multiplayer mode');
             state.game.isMultiplayer = true;
-            
-            // Set a tournament status message
-            if (elements.pongStatus) {
-                elements.pongStatus.innerText = 'Tournament Match Starting...';
-            }
         }
         
         // Store game room info if provided
@@ -717,9 +712,9 @@ const App = (function() {
         setTimeout(() => {
             console.log('Starting pong game...');
             
-            // For multiplayer games, use ServerPong; otherwise use regular PongGame
+            // For multiplayer games (including tournaments), use ServerPong
             if (state.game.isMultiplayer) {
-                console.log('Using ServerPong renderer for multiplayer game');
+                console.log('Using ServerPong renderer for multiplayer/tournament game');
                 if (window.ServerPong && typeof ServerPong.init === 'function') {
                     ServerPong.init({
                         canvasId: 'pong-canvas',
@@ -742,9 +737,11 @@ const App = (function() {
                             },
                             onGameStart: () => {
                                 console.log('ServerPong game started');
+                                state.game.active = true;
                             },
                             onGameEnd: () => {
                                 console.log('ServerPong game ended');
+                                state.game.active = false;
                             }
                         }
                     });
@@ -757,7 +754,7 @@ const App = (function() {
                 // For AI and custom games, use the regular PongGame
                 startPongGame();
             }
-        }, 100);
+        }, 500); // Increased delay for more reliable initialization
     }
         
     /**

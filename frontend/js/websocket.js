@@ -60,6 +60,7 @@ const WebSocketManager = (function() {
       }
     });
   }
+
   
   /**
    * Handle page visibility changes
@@ -212,19 +213,19 @@ const WebSocketManager = (function() {
       },
       
       start_game: () => {
-        console.log("Received start_game event, triggering callback with rounds:", data.rounds);
+        console.log("Received start_game event, triggering callback with data:", data);
         
         // Set player side in ServerPong if available
         if (window.ServerPong && data.player_side) {
-          window.ServerPong.setPlayerSide(data.player_side);
+            window.ServerPong.setPlayerSide(data.player_side);
         }
         
         if (data.room) {
-          try {
-            localStorage.setItem('currentGameRoom', data.room);
-          } catch (e) {
-            console.error("Error saving game room:", e);
-          }
+            try {
+                localStorage.setItem('currentGameRoom', data.room);
+            } catch (e) {
+                console.error("Error saving game room:", e);
+            }
         }
         
         if (gameCallbacks.onGameStart) {
@@ -237,7 +238,7 @@ const WebSocketManager = (function() {
               data.room || null,
               data.player_side || 'left'
             );
-          }, 50);
+          }, 100);
         }
       },
       
@@ -275,7 +276,7 @@ const WebSocketManager = (function() {
       // Tournament handlers
       tournament_list: () => {
         if (window.TournamentManager) {
-          window.TournamentManager.updateTournamentList(data.tournaments);
+          window.TournamentManager.updateTournamentsList(data.tournaments);
         }
       },
       

@@ -8,6 +8,7 @@ import random
 import threading
 from datetime import datetime
 from channels.generic.websocket import AsyncWebsocketConsumer
+from .game import PongGame
 
 from api.metrics import (
     GAME_STARTED, GAME_COMPLETED, GAME_DURATION, 
@@ -1116,10 +1117,13 @@ class PongConsumer(AsyncWebsocketConsumer):
         
         # Create server-side game
         game = game_manager.create_game(tourney_game_room, target_rounds=tournament.rounds)
+
         
         # Add players to the game
         game_manager.add_player_to_game(tourney_game_room, player1_channel, "left")
         game_manager.add_player_to_game(tourney_game_room, player2_channel, "right")
+        
+        logger.info(f"Added players to tournament game: left={player1_channel}, right={player2_channel}")
         
         # Add to channel group
         await self.channel_layer.group_add(tourney_game_room, player1_channel)
@@ -1129,9 +1133,13 @@ class PongConsumer(AsyncWebsocketConsumer):
         active_games[player1_channel] = tourney_game_room
         active_games[player2_channel] = tourney_game_room
         
-        # Start the game
-        game_manager.start_game(tourney_game_room)
-        
+        # Start the game with a small delay to ensure players are ready
+        await asyncio.sleep(0.5)
+        success = game_manager.start_game(tourney_game_room)
+        if not success:
+            logger.error(f"Failed to start tournament game: {tourney_game_room}")
+            return
+        logger.info(f"Tournament game started: {success}")
         # Set up state sync loop for this game
         asyncio.create_task(self.game_sync_loop(tourney_game_room))
         
@@ -1149,6 +1157,9 @@ class PongConsumer(AsyncWebsocketConsumer):
                 "player_side": "left"
             }
         )
+        
+        # Add small delay between messages to prevent race conditions
+        await asyncio.sleep(0.1)
         
         await self.channel_layer.send(
             player2_channel,
@@ -1271,14 +1282,30 @@ class PongConsumer(AsyncWebsocketConsumer):
     async def game_sync_loop(self, game_room):
         """Periodically send game state to clients"""
         
+        logger.info(f"Starting game sync loop for room: {game_room}")
+        
         try:
+            # Track when we start the game sync
+            start_time = time.time()
+            sync_count = 0
+            
             while True:
                 # Get game instance
                 game = game_manager.active_games.get(game_room)
-                if not game or not game.is_running:
-                    # Game is no longer active
+                
+                # Debug game instance lookup
+                if not game:
+                    logger.error(f"Game not found in game_manager.active_games for room: {game_room}")
+                    # Check if the room exists in the global dictionary for additional debugging
+                    is_in_global = game_room in [room for room in active_games.values()]
+                    logger.error(f"Room {game_room} exists in global active_games: {is_in_global}")
+                    break
+                    
+                if not game.is_running:
+                    logger.info(f"Game in room {game_room} is no longer running")
                     # Check if game has a winner and notify players
-                    if game and game.winner:
+                    if game.winner:
+                        logger.info(f"Game in room {game_room} has winner: {game.winner}")
                         # Determine scores to send
                         if game.winner == "left":
                             winner_score = game.left_score
@@ -1295,10 +1322,22 @@ class PongConsumer(AsyncWebsocketConsumer):
                                 "winner": winner
                             }
                         )
+                        logger.info(f"Game over notification sent for room {game_room}")
+                    else:
+                        logger.warning(f"Game in room {game_room} stopped without a winner")
                     break
                 
                 # Get current game state
                 state = game.get_state()
+                
+                # Increment sync counter
+                sync_count += 1
+                
+                # Log performance metrics occasionally
+                if sync_count % 300 == 0:  # Log every ~5 seconds
+                    elapsed = time.time() - start_time
+                    fps = sync_count / elapsed
+                    logger.debug(f"Game sync stats for room {game_room}: {sync_count} updates, {fps:.1f} FPS")
                 
                 # Send to all players in this game room
                 await self.channel_layer.group_send(
@@ -1311,8 +1350,28 @@ class PongConsumer(AsyncWebsocketConsumer):
                 
                 # Wait for next update
                 await asyncio.sleep(1/60)  # ~ 60 FPS
+        except asyncio.CancelledError:
+            logger.info(f"Game sync loop cancelled for room: {game_room}")
         except Exception as e:
-            logger.error(f"Error in game sync loop: {e}")
+            logger.error(f"Error in game sync loop for room {game_room}: {e}")
+            # Add traceback for better debugging
+            import traceback
+            logger.error(traceback.format_exc())
+        finally:
+            logger.info(f"Game sync loop ended for room: {game_room}")
+            
+            # Record game duration if applicable
+            if start_time:
+                duration = time.time() - start_time
+                logger.info(f"Game in room {game_room} ran for {duration:.2f} seconds")
+                
+                # If we have metrics integration, record the duration
+                try:
+                    # Assume 'classic' mode if not specified
+                    GAME_DURATION.labels(mode='classic').observe(duration)
+                except Exception as metrics_error:
+                    # Don't let metrics recording failure affect the game
+                    logger.warning(f"Failed to record game metrics: {metrics_error}")
 
     async def start_game(self, event):
         """Send start game event to client"""
