@@ -124,69 +124,87 @@
             <button id="privacy-policy-button" data-navigate="privacy-policy-page" class="button btn btn-secondary mt-2 w-100">Privacy Policy / GDPR</button>
         </section>
 
-        <!-- Create a new tournament page that will be navigated to when selecting tournament mode -->
+        <!-- Tournament Page -->
         <section id="tournament-page" class="page">
             <h2 class="text-center">Tournament Mode</h2>
             
             <!-- Tournament creation section -->
             <div class="card bg-transparent mb-3">
-                <div class="card-body">
-                    <h4 class="card-title">Create or Join Tournament</h4>
-                    <p class="card-text">Create your own tournament or join an existing one.</p>
-                    
-                    <button id="create-tournament" class="button btn btn-primary w-100 mb-2">Create Tournament</button>
+            <div class="card-body">
+                <h4 class="card-title">Create or Join Tournament</h4>
+                <p class="card-text">Create your own tournament or join an existing one.</p>
+                
+                <div class="mb-3">
+                <label for="tournament-rounds-input" class="form-label">Rounds per Match</label>
+                <input type="number" id="tournament-rounds-input" class="form-control" value="3" min="1" max="9">
                 </div>
+                
+                <button id="create-tournament" class="button btn btn-primary w-100 mb-2">Create Tournament</button>
+            </div>
             </div>
             
             <!-- Tournament info (when in a tournament) -->
-            <div id="active-tournament" class="card bg-transparent mt-3 tournament-section" style="display: none;">
-                <div class="card-body">
-                    <h4 class="card-title">Tournament: <span id="tournament-name">-</span></h4>
-                    <div class="tournament-controls">
-                        <!-- Only tournament creator sees this -->
-                        <button id="start-tournament" class="btn btn-sm btn-success mb-2" style="display: none;">
-                            Start Tournament
-                        </button>
-                        <button id="leave-tournament" class="btn btn-sm btn-danger mb-2">
-                            Leave Tournament
-                        </button>
-                    </div>
-                    
-                    <h5>Players</h5>
-                    <ul id="tournament-players" class="list-group list-group-flush mb-3"></ul>
-                    
-                    <div id="tournament-matches" class="tournament-section">
-                        <h5>Current Match</h5>
-                        <div id="current-match" class="current-match-display mb-2">No active match</div>
-                        
-                        <h5>Upcoming Matches</h5>
-                        <ul id="upcoming-matches" class="list-group list-group-flush mb-2"></ul>
-                        
-                        <h5>Completed Matches</h5>
-                        <ul id="completed-matches" class="list-group list-group-flush"></ul>
-                    </div>
+            <div id="active-tournament" class="card bg-transparent mt-3" style="display: none;">
+            <div class="card-body">
+                <h4 class="card-title">Tournament: <span id="tournament-name">-</span></h4>
+                <div class="tournament-controls">
+                <!-- Only tournament creator sees this -->
+                <button id="start-tournament" class="btn btn-sm btn-success mb-2" style="display: none;">
+                    Start Tournament
+                </button>
+                <button id="leave-tournament" class="btn btn-sm btn-danger mb-2">
+                    Leave Tournament
+                </button>
                 </div>
+                
+                <h5>Players</h5>
+                <ul id="tournament-players" class="list-group list-group-flush mb-3"></ul>
+                
+                <div id="tournament-matches">
+                <h5>Current Match</h5>
+                <div id="current-match" class="current-match-display mb-2">No active match</div>
+                
+                <h5>Upcoming Matches</h5>
+                <ul id="upcoming-matches" class="list-group list-group-flush mb-2"></ul>
+                
+                <h5>Completed Matches</h5>
+                <ul id="completed-matches" class="list-group list-group-flush"></ul>
+                </div>
+            </div>
             </div>
             
             <!-- Available tournaments list -->
-            <div id="available-tournaments" class="card bg-transparent mt-3 tournament-section">
-                <div class="card-body">
-                    <h4 class="card-title">Available Tournaments</h4>
-                    <ul id="tournament-list" class="list-group list-group-flush">
-                        <li class="list-group-item">No tournaments available</li>
-                    </ul>
-                </div>
+            <div id="available-tournaments" class="card bg-transparent mt-3">
+            <div class="card-body">
+                <h4 class="card-title">Available Tournaments</h4>
+                <ul id="tournament-list" class="list-group list-group-flush">
+                <li class="list-group-item">No tournaments available</li>
+                </ul>
+            </div>
             </div>
             
             <!-- Tournament Leave Warning -->
             <div id="tournament-leave-warning" class="exit-warning mt-3" style="display: none;">
-                <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
-                WARNING: Leaving this page will remove you from the current tournament!
+            <i class="fa fa-exclamation-triangle" aria-hidden="true"></i>
+            WARNING: Leaving this page will remove you from the current tournament!
             </div>
-
+        
             <!-- Back Button -->
-            <button id="tournament-back-button" data-navigate="game-page" class="button btn btn-secondary mt-3 w-100">Back to Menu</button>
+            <button id="tournament-back-button" class="button btn btn-secondary mt-3 w-100">Back to Menu</button>
         </section>
+        
+        <!-- Victory Screen Template (will be inserted dynamically when needed) -->
+        <template id="tournament-victory-template">
+            <div class="result-screen winner">
+            <div class="tournament-victory">
+                <h2>🏆 TOURNAMENT CHAMPION! 🏆</h2>
+                <h3>Congratulations! You've won the tournament!</h3>
+                <p class="victory-message">You have defeated all opponents and claimed victory.</p>
+                <button class="button" id="victory-continue">CONTINUE</button>
+            </div>
+            </div>
+        </template>
+  
 
         <!-- Custom Game Page -->
         <section id="custom-game-page" class="page">
@@ -436,6 +454,12 @@
     
     <!-- Optional Mobile Support -->
     <script src="js/mobile-joystick.js"></script>
+    <script src="js/tournament-match-fix.js"></script>
+    <script src="js/tournament-nav-fix.js"></script>
+    <script src="js/tournament-ui-enhancement.js"></script>
+    <script src="js/simplified-tournament.js"></script>
+    <script src="js/tournament-integration.js"></script>
+
 
     <!-- Background Pong Script -->
     <script src="js/easter-egg.js"></script>

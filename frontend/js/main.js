@@ -222,11 +222,11 @@ const App = (function() {
             initModule('CustomGame', () => CustomGameManager.init(elements));
             modules.customGame = CustomGameManager;
         }
-        
-        // 6. Initialize Tournament Manager (no user yet)
-        if (window.TournamentManager && typeof TournamentManager.init === 'function') {
-            initModule('Tournament', () => TournamentManager.init(elements, ""));
-            modules.tournament = TournamentManager;
+
+        // 6. Store reference to SimpleTournamentManager but don't initialize yet
+        if (window.SimpleTournamentManager) {
+            modules.tournament = SimpleTournamentManager;
+            console.log('SimpleTournamentManager module referenced (will initialize on tournament page)');
         }
         
         // 7. Initialize GDPR Manager
@@ -774,189 +774,93 @@ const App = (function() {
     }
     
     function handleGameOver(score, winner) {
-        console.log(`handleGameOver called: score=${score}, winner=${winner}, rounds=${state.game.rounds.current}, target=${state.game.rounds.target}`);
+        console.log(`handleGameOver called: score=${score}, winner=${winner}`);
         
-        //Deadlock Patch
-        // Force cleanup if winner is undefined but score indicates game should be over
+        // Deadlock Patch
         const winThreshold = Math.ceil(state.game.rounds.target / 2);
         if (winner === undefined && score >= winThreshold) {
-          console.log('Winner undefined but score indicates game over - forcing cleanup');
-          state.game.active = false;
-          
-          // Stop the appropriate game engine
-          if (state.game.isMultiplayer && window.ServerPong) {
-            ServerPong.stop();
-          } else if (window.PongGame) {
-            PongGame.stop();
-          }
-          
-          // Exit fullscreen
-          exitFullscreen();
-          
-          // End game and return to menu
-          endPongGame();
-          return;
+            console.log('Winner undefined but score indicates game over - forcing cleanup');
+            state.game.active = false;
+            
+            // Stop the appropriate game engine
+            if (state.game.isMultiplayer && window.ServerPong) {
+                ServerPong.stop();
+            } else if (window.PongGame) {
+                PongGame.stop();
+            }
+            
+            // Exit fullscreen
+            exitFullscreen();
+            
+            // End game and return to menu
+            endPongGame();
+            return;
         }
-      
+    
         // Game is over if we have a definitive winner
         if (winner === 'left' || winner === 'right') {
-          console.log('Game is over - processing end game logic');
-          state.game.active = false; // Game is no longer active
-          
-          // If this is a tournament game, handle it differently
-          if (state.game.isTournament) {
-            console.log('Tournament game over - determining winner status');
+            console.log('Game is over - processing end game logic');
+            state.game.active = false; // Game is no longer active
             
-            // Determine if current player won based on playerSide
-            const playerSide = state.game.playerSide || 'left';
-            const playerWon = (playerSide === 'left' && winner === 'left') || 
-                             (playerSide === 'right' && winner === 'right');
-            
-            console.log(`Tournament result: playerSide=${playerSide}, winner=${winner}, playerWon=${playerWon}`);
-            
-            // Send game over to WebSocket to notify tournament system
-            if (modules.websocket) {
-              modules.websocket.sendGameOver(state.game.rounds.current);
+            // For multiplayer games, send game over notification to server
+            if (state.game.isMultiplayer && modules.websocket) {
+                modules.websocket.sendGameOver(score);
             }
             
             // Stop the appropriate game engine
             if (state.game.isMultiplayer && window.ServerPong) {
-              ServerPong.stop();
+                ServerPong.stop();
             } else if (window.PongGame) {
-              PongGame.stop();
+                PongGame.stop();
             }
             
             // Exit fullscreen if active
             exitFullscreen();
             
-            // VICTORY CHECK: Two ways to check if this is the final match
-            // 1. Check TournamentManager if available
-            let isFinalVictory = false;
+            // The tournament specific handling is delegated to the tournament-integration.js script
+            // via the WebSocket handlers. We don't need to handle it here anymore.
             
-            if (window.TournamentManager && typeof TournamentManager.isTournamentComplete === 'function') {
-              isFinalVictory = playerWon && TournamentManager.isTournamentComplete();
-              console.log(`Checking TournamentManager.isTournamentComplete(): ${isFinalVictory}`);
-            }
-            
-            // 2. If the first check didn't work, try another approach with the tournament state
-            if (!isFinalVictory && playerWon && window.TournamentManager) {
-              // Try to detect if this was the final match from tournament state
-              const tournamentState = TournamentManager._currentTournamentState;
-              if (tournamentState) {
-                const noUpcomingMatches = !tournamentState.upcoming_matches || 
-                                          tournamentState.upcoming_matches.length === 0;
-                const noCurrentMatch = !tournamentState.current_match;
+            // For non-tournament games, record the result
+            if (!state.game.isTournament) {
+                // Record game result with a winning score value
+                const winningScore = Math.ceil(state.game.rounds.target / 2);
                 
-                isFinalVictory = noUpcomingMatches && noCurrentMatch;
-                console.log(`Direct tournament state check: noUpcomingMatches=${noUpcomingMatches}, noCurrentMatch=${noCurrentMatch}`);
-              }
-            }
-            
-            // If we've determined this is the final match and player won, show victory screen
-            if (playerWon) {
-              if (isFinalVictory) {
-                console.log("TOURNAMENT FINAL VICTORY - showing victory screen");
-                showTournamentVictoryScreen();
-                return; // Exit early to prevent navigation
-              } else {
-                console.log("Match won but not final match - waiting for next match");
-                showToast('Match won! Waiting for next match...', 'success');
-              }
-            } else {
-              console.log("Match lost - tournament complete for player");
-              showToast('Match lost. Tournament complete for you.', 'info');
-              
-              // Clean up tournament state for non-winners
-              if (window.TournamentManager && typeof TournamentManager.resetTournamentState === 'function') {
-                TournamentManager.resetTournamentState();
-              }
-            }
-            
-            // Navigate back to game page where tournament UI is
-            setTimeout(() => {
-              if (modules.ui) {
-                modules.ui.navigateTo('game-page');
-              }
-            }, 500);
-            
-          } else { // Regular non-tournament game
-            console.log('Regular game over - ending game');
-            
-            // For multiplayer server-side games, record the result
-            if (state.game.isMultiplayer) {
-              // Determine if current player won based on playerSide
-              const playerSide = state.game.playerSide || 'left';
-              const playerWon = (playerSide === 'left' && winner === 'left') || 
-                               (playerSide === 'right' && winner === 'right');
-              
-              console.log(`Game result: playerSide=${playerSide}, winner=${winner}, playerWon=${playerWon}`);
-              
-              // Record game result with a winning score value
-              const winningScore = Math.ceil(state.game.rounds.target / 2);
-              recordGameResult(
-                state.user.nickname,
-                state.user.token,
-                playerWon ? winningScore : 0,
-                state.game.rounds.target
-              ).then(result => {
-                // Success messages
-                showToast('Game ended and result recorded!', 'success');
+                // Determine if current player won based on playerSide
+                const playerSide = state.game.playerSide || 'left';
+                const playerWon = (playerSide === 'left' && winner === 'left') || 
+                                (playerSide === 'right' && winner === 'right');
                 
-                // Show appropriate win/loss message
-                if (playerWon) {
-                  showToast('Congratulations! You won the game!', 'success');
-                } else {
-                  showToast('Game over. Better luck next time!', 'warning');
-                }
-                
-                // Navigate to leaderboard after a short delay
-                setTimeout(() => {
-                  if (modules.ui) {
-                    modules.ui.navigateTo('leaderboard-page');
-                  }
-                }, 1000);
-              }).catch(error => {
-                console.error('Error recording game result:', error);
-                showNetworkError('Failed to record game result!');
-              });
+                recordGameResult(
+                    state.user.nickname,
+                    state.user.token,
+                    playerWon ? winningScore : 0,
+                    state.game.rounds.target
+                ).then(result => {
+                    // Success messages
+                    showToast('Game ended and result recorded!', 'success');
+                    
+                    // Show appropriate win/loss message
+                    if (playerWon) {
+                        showToast('Congratulations! You won the game!', 'success');
+                    } else {
+                        showToast('Game over. Better luck next time!', 'warning');
+                    }
+                    
+                    // Navigate to leaderboard after a short delay
+                    setTimeout(() => {
+                        if (modules.ui) {
+                            modules.ui.navigateTo('leaderboard-page');
+                        }
+                    }, 1000);
+                }).catch(error => {
+                    console.error('Error recording game result:', error);
+                    showNetworkError('Failed to record game result!');
+                });
             }
             
             endPongGame();
-          }
-        } else {
-          console.log('No definitive winner yet - continuing game');
         }
     }
-      
-    function resetAllTournamentState() {
-        console.log("Performing complete tournament state reset");
-        
-        // Reset TournamentManager state if available
-        if (window.TournamentManager && typeof TournamentManager.resetTournamentState === 'function') {
-          TournamentManager.resetTournamentState();
-        }
-        
-        // Reset game state
-        state.game.isTournament = false;
-        
-        // Remove warnings
-        const warningBanner = document.getElementById('tournament-warning-banner');
-        if (warningBanner) warningBanner.style.display = 'none';
-        
-        const leaveWarning = document.getElementById('tournament-leave-warning');
-        if (leaveWarning) leaveWarning.style.display = 'none';
-        
-        // Clear localStorage
-        try {
-          localStorage.removeItem('inTournament');
-          localStorage.removeItem('currentGameRoom');
-          localStorage.removeItem('currentTournament');
-        } catch (e) {
-          console.warn("Could not clear localStorage:", e);
-        }
-        
-        console.log("Tournament state reset complete");
-      }
 
     /**
      * Handle opponent leaving the game
@@ -1125,8 +1029,10 @@ const App = (function() {
                 // Go to tournament page instead of starting tournament immediately
                 if (modules.ui) {
                     // Update Tournament Manager nickname first
-                    if (modules.tournament) {
-                        modules.tournament.setNickname(nickname);
+                    try {
+                        localStorage.setItem('currentNickname', nickname);
+                    } catch(e) {
+                        console.warn('Could not store nickname in localStorage', e);
                     }
                     modules.ui.navigateTo('tournament-page');
                 }
@@ -1148,48 +1054,6 @@ const App = (function() {
                 // Classic with queue (default)
                 startMultiplayerGame(nickname, state.user.token, state.game.rounds.target);
                 break;
-        }
-    }
-    
-    /**
-     * Handle Tournament mode selection
-     * @param {string} nickname - Player nickname
-     */
-    function handleTournamentMode(nickname) {
-        // Check if TournamentManager exists
-        if (!modules.tournament) {
-            console.error('TournamentManager not found! Make sure tournament-manager.js is loaded.');
-            showError('Tournament functionality unavailable. Please try again later.');
-            return;
-        }
-        
-        console.log('Initializing Tournament Manager...');
-        // Set Tournament Manager nickname
-        modules.tournament.setNickname(nickname);
-        
-        // Navigate to game page
-        if (modules.ui) {
-            modules.ui.navigateTo('game-page');
-        }
-        
-        // Make sure tournament sections are visible
-        const availableTournamentsElement = document.getElementById('available-tournaments');
-        if (availableTournamentsElement) {
-            availableTournamentsElement.style.display = 'block';
-        }
-        
-        // Request latest tournament list
-        if (modules.websocket && modules.websocket.isConnected()) {
-            console.log('Requesting tournament list...');
-            modules.websocket.send({
-                type: 'get_tournaments'
-            });
-        } else {
-            const message = modules.localization ? 
-                modules.localization.get('connectionError') : 
-                'Connection error. Please check your internet connection.';
-                
-            showError(message);
         }
     }
     
@@ -1455,16 +1319,11 @@ const App = (function() {
             // We just need to know if this was a tournament game
             
             // Check if this was a tournament game
-            if (state.game.isTournament && modules.tournament && modules.tournament.isInTournament()) {
-              // Send game over to WebSocket to notify tournament system
-              if (modules.websocket) {
-                modules.websocket.sendGameOver(state.game.rounds.current);
-              }
-              
-              // Navigate back to game page where tournament UI is
-              if (modules.ui) {
-                modules.ui.navigateTo('game-page');
-              }
+            if (state.game.isTournament) {
+                // Just navigate back to the main menu
+                if (modules.ui) {
+                    modules.ui.navigateTo('game-page');
+                }
             } else {
               // Get the final result from ServerPong
               let result = { winner: false };

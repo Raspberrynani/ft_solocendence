@@ -119,7 +119,6 @@ class Tournament:
         self.completed_matches = []
         
         # Shuffle players for random matchups
-        import random
         shuffled_players = self.players.copy()
         random.shuffle(shuffled_players)
         
@@ -223,7 +222,6 @@ class Tournament:
             "completed_matches": completed,
             "winners": winners
         }
-
 
 # Server-side Pong Game implementation
 class PongGame:
@@ -877,11 +875,38 @@ class PongConsumer(AsyncWebsocketConsumer):
             logger.error(f"Error processing message: {e}")
 
     # Tournament-related methods
+    
+
+    
+    
+
+    async def broadcast_waiting_list(self):
+        """Broadcast waiting list to all clients in lobby"""
+        waiting_list = [{"nickname": p["nickname"], "rounds": p["rounds"]} for p in waiting_players]
+        logger.debug(f"Broadcasting waiting list: {len(waiting_list)} players")
+        
+        try:
+            await self.channel_layer.group_send("lobby", {
+                "type": "waiting_list_update",
+                "waiting_list": waiting_list
+            })
+        except Exception as e:
+            logger.error(f"Error broadcasting waiting list: {e}")
+
+    async def waiting_list_update(self, event):
+        """Send waiting list update to connected client"""
+        waiting_list = event.get("waiting_list", [])
+        logger.debug(f"Sending waiting list update: {len(waiting_list)} players")
+        
+        await self.send(text_data=json.dumps({
+            "type": "waiting_list",
+            "waiting_list": waiting_list
+        }))
+        
     async def handle_create_tournament(self, data):
         """Handle tournament creation request"""
         global active_tournaments, tournament_players
         
-        TOURNAMENT_CREATED.inc()
         nickname = data.get("nickname")
         tournament_name = data.get("name", f"{nickname}'s Tournament")
         rounds = data.get("rounds", 3)
@@ -972,7 +997,7 @@ class PongConsumer(AsyncWebsocketConsumer):
 
     async def handle_start_tournament(self, data):
         """Handle tournament start request"""
-        global active_tournaments, tournament_players, active_games
+        global active_tournaments, tournament_players
         
         tournament_id = data.get("tournament_id")
         
@@ -1034,66 +1059,6 @@ class PongConsumer(AsyncWebsocketConsumer):
         
         # Broadcast updated tournament list
         await self.broadcast_tournament_list()
-
-    async def start_tournament_match(self, tournament, match):
-        """Start a match within a tournament"""
-        global active_games, game_manager
-        
-        player1 = match["player1"]
-        player2 = match["player2"]
-        
-        logger.info(f"Starting tournament match: {player1['nickname']} vs {player2['nickname']}")
-        
-        # Create a new game room for this match
-        tourney_game_room = "tourney_game_" + str(uuid.uuid4())
-        
-        # Create server-side game
-        game = game_manager.create_game(tourney_game_room, target_rounds=tournament.rounds)
-        
-        # Add players to the game
-        game_manager.add_player_to_game(tourney_game_room, player1["channel"], "left")
-        game_manager.add_player_to_game(tourney_game_room, player2["channel"], "right")
-        
-        # Add to channel group
-        await self.channel_layer.group_add(tourney_game_room, player1["channel"])
-        await self.channel_layer.group_add(tourney_game_room, player2["channel"])
-        
-        # Store room mapping
-        active_games[player1["channel"]] = tourney_game_room
-        active_games[player2["channel"]] = tourney_game_room
-        
-        # Start the game
-        game_manager.start_game(tourney_game_room)
-        
-        # Set up state sync loop for this game
-        asyncio.create_task(self.game_sync_loop(tourney_game_room))
-        
-        # Start game for both players
-        match_message = f"Tournament match: {player1['nickname']} vs {player2['nickname']}"
-        
-        await self.channel_layer.send(
-            player1["channel"],
-            {
-                "type": "start_game",
-                "message": match_message,
-                "room": tourney_game_room,
-                "rounds": tournament.rounds,
-                "is_tournament": True,
-                "player_side": "left"
-            }
-        )
-        
-        await self.channel_layer.send(
-            player2["channel"],
-            {
-                "type": "start_game",
-                "message": match_message,
-                "room": tourney_game_room,
-                "rounds": tournament.rounds,
-                "is_tournament": True,
-                "player_side": "right"
-            }
-        )
 
     async def handle_leave_tournament(self):
         """Handle player leaving a tournament"""
@@ -1218,23 +1183,63 @@ class PongConsumer(AsyncWebsocketConsumer):
         
         return True
 
-    async def broadcast_waiting_list(self):
-        """Broadcast waiting list to all clients in lobby"""
-        waiting_list = [{"nickname": p["nickname"], "rounds": p["rounds"]} for p in waiting_players]
-        logger.debug(f"Broadcasting waiting list: {len(waiting_list)} players")
+    async def start_tournament_match(self, tournament, match):
+        """Start a match within a tournament"""
+        player1 = match["player1"]
+        player2 = match["player2"]
         
-        try:
-            await self.channel_layer.group_send("lobby", {
-                "type": "waiting_list_update",
-                "waiting_list": waiting_list
-            })
-        except Exception as e:
-            logger.error(f"Error broadcasting waiting list: {e}")
-    
+        logger.info(f"Starting tournament match: {player1['nickname']} vs {player2['nickname']}")
+        
+        # Create a new game room for this match
+        tourney_game_room = "tourney_game_" + str(uuid.uuid4())
+        
+        # Create server-side game
+        game = self.game_manager.create_game(tourney_game_room, target_rounds=tournament.rounds)
+        
+        # Add players to the game
+        self.game_manager.add_player_to_game(tourney_game_room, player1["channel"], "left")
+        self.game_manager.add_player_to_game(tourney_game_room, player2["channel"], "right")
+        
+        # Add to channel group
+        await self.channel_layer.group_add(tourney_game_room, player1["channel"])
+        await self.channel_layer.group_add(tourney_game_room, player2["channel"])
+        
+        # Store room mapping
+        self.active_games[player1["channel"]] = tourney_game_room
+        self.active_games[player2["channel"]] = tourney_game_room
+        
+        # Start the game
+        self.game_manager.start_game(tourney_game_room)
+        
+        # Start game for both players
+        match_message = f"Tournament match: {player1['nickname']} vs {player2['nickname']}"
+        
+        await self.channel_layer.send(
+            player1["channel"],
+            {
+                "type": "start_game",
+                "message": match_message,
+                "room": tourney_game_room,
+                "rounds": tournament.rounds,
+                "is_tournament": True,
+                "player_side": "left"
+            }
+        )
+        
+        await self.channel_layer.send(
+            player2["channel"],
+            {
+                "type": "start_game",
+                "message": match_message,
+                "room": tourney_game_room,
+                "rounds": tournament.rounds,
+                "is_tournament": True,
+                "player_side": "right"
+            }
+        )
+
     async def broadcast_tournament_list(self):
         """Broadcast the current tournament list to all clients in lobby"""
-        global active_tournaments
-        
         # Build list of active tournaments
         tournament_list = [
             {
@@ -1257,20 +1262,10 @@ class PongConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error broadcasting tournament list: {e}")
 
-    async def waiting_list_update(self, event):
-        """Send waiting list update to connected client"""
-        waiting_list = event.get("waiting_list", [])
-        logger.debug(f"Sending waiting list update: {len(waiting_list)} players")
-        
-        await self.send(text_data=json.dumps({
-            "type": "waiting_list",
-            "waiting_list": waiting_list
-        }))
-    
+    # Method to add to PongConsumer class
     async def tournament_list_update(self, event):
         """Send updated tournament list to client"""
         tournaments = event.get("tournaments", [])
-        logger.debug(f"Sending tournament list update: {len(tournaments)} tournaments")
         
         await self.send(text_data=json.dumps({
             "type": "tournament_list",
