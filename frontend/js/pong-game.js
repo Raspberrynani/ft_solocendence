@@ -30,7 +30,7 @@ const PongGame = (function() {
       speedIncrement: 0.5,
       paddleSpeed: 4.5,
       initialBallSpeed: 4,
-      paddleSizeMultiplier: 2.0,  // Default 100%
+      paddleSizeMultiplier: 1.0,  // Default 100%
       ballColor: '#00d4ff',
       leftPaddleColor: '#007bff',
       rightPaddleColor: '#ff758c',
@@ -223,12 +223,13 @@ const PongGame = (function() {
       // Calculate dimensions based on canvas size
       updateGameDimensions(true); // Force update with reset
       
-      // Apply paddle size multiplier but maintain minimum size
-      paddleHeight = Math.max(60, Math.floor(canvas.height * 0.2) * (gameConfig.paddleSizeMultiplier / 100));
-      paddleWidth = Math.max(10, Math.floor(canvas.width * 0.02));
+      // INCREASE BASE PADDLE SIZE:
+      // Make paddles significantly larger (was 0.2 or 20% of canvas height)
+      paddleHeight = Math.max(120, Math.floor(canvas.height * 1) * (gameConfig.paddleSizeMultiplier / 100));
+      paddleWidth = Math.max(12, Math.floor(canvas.width * 0.15));;
       
       // Ensure ball radius is set properly
-      ballRadius = Math.max(5, Math.floor(Math.min(canvas.width, canvas.height) * 0.01));
+      ballRadius = Math.max(6, Math.floor(Math.min(canvas.width, canvas.height) * 0.012));
       
       // Reset paddles with explicit dimensions
       leftPaddle = { 
@@ -323,9 +324,10 @@ const PongGame = (function() {
       calculateSpeedScaleFactor();
       
       // Calculate game element dimensions based on new canvas size
-      paddleWidth = Math.max(10, Math.floor(canvas.width * 0.02));
-      paddleHeight = Math.max(60, Math.floor(canvas.height * 0.2) * (gameConfig.paddleSizeMultiplier / 100));
-      ballRadius = Math.max(5, Math.floor(Math.min(canvas.width, canvas.height) * 0.01));
+      // MUCH LONGER PADDLES:
+      paddleWidth = Math.max(12, Math.floor(canvas.width * 0.025));
+      paddleHeight = Math.max(120, Math.floor(canvas.height * 0.35) * (gameConfig.paddleSizeMultiplier / 100));
+      ballRadius = Math.max(6, Math.floor(Math.min(canvas.width, canvas.height) * 0.012));
       
       // Update paddle positions if they exist
       if (leftPaddle) {
@@ -389,16 +391,24 @@ const PongGame = (function() {
      */
     function initAI(difficulty) {
       aiState = {
-        lastUpdateTime: 0,
-        action: null,
-        lastBallPosition: { x: 0, y: 0 },
-        calculatedVelocity: { x: 0, y: 0 },
-        decisionInterval: 1000, // 1 second between decisions
-        difficulty: difficulty || 0.7, // 0 to 1, higher is harder
-        targetY: 0,
-        reactionDelay: 0
+          lastUpdateTime: 0,
+          action: null,
+          lastBallPosition: { x: 0, y: 0 },
+          calculatedVelocity: { x: 0, y: 0 },
+          decisionInterval: 800, // Slightly reduced from 1000 for faster response
+          difficulty: difficulty || 0.7, // 0 to 1, higher is harder
+          targetY: 0,
+          reactionDelay: 0,
+          smoothingFactor: 0.3 // Add smoothing factor for interpolation
       };
-    }
+      
+      // Increase paddle size for AI right at initialization
+      if (rightPaddle) {
+          const originalHeight = paddleHeight;
+          rightPaddle.height = Math.floor(originalHeight * 1.25);
+      }
+  }
+  
     
     /**
      * Reset AI state with a new difficulty level
@@ -406,8 +416,8 @@ const PongGame = (function() {
      */
     function resetAI(difficulty) {
       if (!aiState) {
-        initAI(difficulty);
-        return;
+          initAI(difficulty);
+          return;
       }
       
       // Keep the AI structure but reset its state
@@ -418,17 +428,24 @@ const PongGame = (function() {
       
       // Update difficulty if provided
       if (difficulty !== undefined) {
-        aiState.difficulty = Utils.clamp(difficulty, 0, 1);
-        
-        // Adjust decision interval based on difficulty
-        // Harder AI makes decisions more frequently
-        aiState.decisionInterval = 1000 - (aiState.difficulty * 500); // 1000ms to 500ms
-        
-        // Adjust reaction delay based on difficulty
-        // Harder AI has less delay
-        aiState.reactionDelay = 500 - (aiState.difficulty * 400); // 500ms to 100ms
+          aiState.difficulty = Utils.clamp(difficulty, 0, 1);
+          
+          // Adjust decision interval based on difficulty
+          // Harder AI makes decisions more frequently
+          aiState.decisionInterval = 1000 - (aiState.difficulty * 500); // 1000ms to 500ms
+          
+          // Adjust reaction delay based on difficulty
+          // Harder AI has less delay
+          aiState.reactionDelay = 500 - (aiState.difficulty * 400); // 500ms to 100ms
       }
-    }
+      
+      // Increase paddle size for AI games
+      if (rightPaddle) {
+          // Increase size by 25% for AI games
+          const originalHeight = paddleHeight;
+          rightPaddle.height = Math.floor(originalHeight * 1.25);
+      }
+  }
     
     /**
      * Set AI difficulty
@@ -690,45 +707,56 @@ const PongGame = (function() {
     function updateAIPaddle(deltaFactor) {
       const now = Date.now();
       
+      // Store previous paddle position for smooth interpolation
+      const prevPaddleY = rightPaddle.y;
+      
       // Calculate current ball velocity
       aiState.calculatedVelocity.x = ball.x - aiState.lastBallPosition.x;
       aiState.calculatedVelocity.y = ball.y - aiState.lastBallPosition.y;
       
       // Only update decision periodically to simulate human reaction time
       if (now - aiState.lastUpdateTime >= aiState.decisionInterval) {
-        aiState.lastUpdateTime = now;
-        aiState.action = calculateAIAction();
-        aiState.lastBallPosition.x = ball.x;
-        aiState.lastBallPosition.y = ball.y;
+          aiState.lastUpdateTime = now;
+          aiState.action = calculateAIAction();
+          aiState.lastBallPosition.x = ball.x;
+          aiState.lastBallPosition.y = ball.y;
       }
       
       // Apply the calculated action
       if (aiState.action === 'up') {
-        rightPaddle.y -= gameConfig.paddleSpeed * deltaFactor;
+          // Move more slowly - reduced speed factor
+          rightPaddle.y -= gameConfig.paddleSpeed * 0.8 * deltaFactor;
       } else if (aiState.action === 'down') {
-        rightPaddle.y += gameConfig.paddleSpeed * deltaFactor;
+          // Move more slowly - reduced speed factor
+          rightPaddle.y += gameConfig.paddleSpeed * 0.8 * deltaFactor;
       }
+      
+      // Apply easing/smoothing between movements
+      // This prevents jerky motion
+      const smoothingFactor = 0.2; // Lower values = smoother movement
+      rightPaddle.y = prevPaddleY * (1 - smoothingFactor) + rightPaddle.y * smoothingFactor;
       
       // Keep paddle in bounds
       rightPaddle.y = Utils.clamp(rightPaddle.y, 0, canvas.height - paddleHeight);
-    }
+  }
     
     /**
      * Calculate AI paddle action based on ball trajectory
      * @returns {string|null} - 'up', 'down', or null
      */
     function calculateAIAction() {
-      // If ball is moving away from AI paddle, return to center
+      // If ball is moving away from AI paddle, move more gently to center
       if (ball.vx < 0) {
-        const paddleCenter = rightPaddle.y + paddleHeight / 2;
-        const canvasCenter = canvas.height / 2;
-        
-        if (paddleCenter < canvasCenter - 20) {
-          return 'down';
-        } else if (paddleCenter > canvasCenter + 20) {
-          return 'up';
-        }
-        return null;
+          const paddleCenter = rightPaddle.y + paddleHeight / 2;
+          const canvasCenter = canvas.height / 2;
+          
+          // Use a smaller threshold to reduce jitter
+          if (paddleCenter < canvasCenter - 40) {
+              return 'down';
+          } else if (paddleCenter > canvasCenter + 40) {
+              return 'up';
+          }
+          return null;
       }
       
       // Calculate time until ball reaches paddle x-position
@@ -745,41 +773,54 @@ const PongGame = (function() {
       // Predict y position at impact
       let predictedY = ball.y + (ball.vy * timeToImpact);
       
-      // Account for bounces off walls
-      const bounces = Math.floor(predictedY / canvas.height);
-      if (bounces % 2 === 1) {
-        predictedY = canvas.height - (predictedY % canvas.height);
-      } else {
-        predictedY = predictedY % canvas.height;
+      // Account for bounces off walls - improved bounce prediction
+      let bounceCount = 0;
+      let tempY = predictedY;
+      const maxBounces = 3; // Limit the number of bounces to consider
+      
+      while ((tempY < 0 || tempY > canvas.height) && bounceCount < maxBounces) {
+          if (tempY < 0) {
+              tempY = -tempY; // Reflect at top
+          } else if (tempY > canvas.height) {
+              tempY = 2 * canvas.height - tempY; // Reflect at bottom
+          }
+          bounceCount++;
       }
       
-      // Add randomness based on difficulty
+      // Use the final predicted position after bounces
+      predictedY = tempY;
+      
+      // Add randomness based on difficulty (but less extreme)
       // Lower difficulty = more randomness
-      const randomFactor = (1 - aiState.difficulty) * paddleHeight * 0.8;
+      const randomFactor = (1 - aiState.difficulty) * paddleHeight * 0.4; // Reduced from 0.8
       const randomOffset = (Math.random() - 0.5) * randomFactor;
       predictedY += randomOffset;
       
-      // If AI is exceptionally good, sometimes deliberately miss
-      if (aiState.difficulty > 0.8 && Math.random() > 0.9) {
-        // 10% chance to make a mistake at high difficulty
-        predictedY += (Math.random() > 0.5 ? 1 : -1) * paddleHeight * 0.8;
+      // If AI is exceptionally good, occasionally deliberately miss but less often
+      if (aiState.difficulty > 0.8 && Math.random() > 0.95) { // 5% chance instead of 10%
+          // Make a mistake at high difficulty
+          predictedY += (Math.random() > 0.5 ? 1 : -1) * paddleHeight * 0.5; // Less extreme
       }
+      
+      // Add a target offset to aim for intercepting with center of paddle
+      // This helps prevent wild movements
+      predictedY -= paddleHeight / 2;
       
       // Calculate center of paddle and desired position
       const paddleCenter = rightPaddle.y + paddleHeight / 2;
       
-      // Tolerance to prevent jitter
-      const tolerance = 10;
+      // Larger tolerance to prevent jitter - this is key for smoothness
+      const tolerance = 20; // Increased from 10
       
       // Determine action
       if (paddleCenter < predictedY - tolerance) {
-        return 'down';
+          return 'down';
       } else if (paddleCenter > predictedY + tolerance) {
-        return 'up';
+          return 'up';
       }
       
       return null;
-    }
+  }
     
     /**
      * Draw the game state
