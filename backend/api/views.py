@@ -20,8 +20,34 @@ def get_csrf_token(request):
     """
     token = get_token(request)
     response = JsonResponse({'csrfToken': token})
+    
+    # Don't use wildcard with credentials - this is the key fix
+    # response['Access-Control-Allow-Origin'] = '*'
+    
+    # Instead, specify the exact origin from the request
+    origin = request.headers.get('Origin', '')
+    if origin:
+        response['Access-Control-Allow-Origin'] = origin
+        response['Access-Control-Allow-Credentials'] = 'true'
+    else:
+        # Fallback for same-origin requests
+        response['Access-Control-Allow-Origin'] = request.build_absolute_uri('/').rstrip('/')
+        response['Access-Control-Allow-Credentials'] = 'true'
+    
     # Make sure we're sending the CSRF token with proper headers
     response['X-CSRFToken'] = token
+    
+    # Set the cookie explicitly with secure settings
+    response.set_cookie(
+        'csrftoken',
+        token,
+        max_age=60 * 60 * 24 * 7 * 52,  # 1 year
+        path='/',
+        secure=False,  # Set to True in production with HTTPS
+        httponly=False,
+        samesite='Lax'
+    )
+    
     return response
 
 @csrf_protect
