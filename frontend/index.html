@@ -2,7 +2,8 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <!-- Updated viewport meta tag with better mobile settings -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="description" content="Solocendence">
     <meta name="theme-color" content="#000000">
     
@@ -10,6 +11,10 @@
     
     <!-- Favicon -->
     <link rel="icon" href="favicon.ico" type="image/x-icon">
+    
+    <!-- Faster loading for mobile -->
+    <link rel="dns-prefetch" href="https://cdn.jsdelivr.net">
+    <link rel="preconnect" href="https://cdn.jsdelivr.net">
     
     <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
@@ -21,6 +26,49 @@
     <link rel="stylesheet" href="styles.css">
     <link rel="stylesheet" href="privacy-policy.css">
     <link rel="stylesheet" href="dashboard-styles.css">
+    
+    <!-- Mobile Responsive CSS -->
+    <link rel="stylesheet" href="css/mobile-responsive.css">
+    <link rel="stylesheet" href="css/tournament-mobile.css">
+    <link rel="stylesheet" href="css/custom-game-mobile.css">
+    
+    <!-- CSS animation for scroll indicator and mobile-specific styles -->
+    <style>
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% { transform: translateY(0) translateX(-50%); }
+            40% { transform: translateY(-10px) translateX(-50%); }
+            60% { transform: translateY(-5px) translateX(-50%); }
+        }
+        
+        /* Class applied to body for tiny screens */
+        body.tiny-screen .mb-3 {
+            margin-bottom: 0.25rem !important;
+        }
+        
+        body.tiny-screen .mt-3 {
+            margin-top: 0.25rem !important;
+        }
+        
+        body.tiny-screen h2 {
+            font-size: 1.25rem !important;
+            margin-bottom: 0.5rem !important;
+        }
+        
+        body.tiny-screen .button {
+            padding: 0.3rem 0.6rem !important;
+            font-size: 0.9rem !important;
+        }
+        
+        /* Custom property for viewport height */
+        :root {
+            --vh: 1vh;
+        }
+        
+        /* Use the custom property for heights */
+        .page {
+            max-height: calc(100 * var(--vh));
+        }
+    </style>
 </head>
 <body>
     <!-- Main Application Container -->
@@ -88,7 +136,7 @@
             </div>
             
             <!-- Tournament info (when in a tournament) -->
-            <div id="active-tournament" class="card bg-transparent mt-3" style="display: none;">
+            <div id="active-tournament" class="card bg-transparent mt-3 tournament-section" style="display: none;">
                 <div class="card-body">
                     <h4 class="card-title">Tournament: <span id="tournament-name">-</span></h4>
                     <div class="tournament-controls">
@@ -104,7 +152,7 @@
                     <h5>Players</h5>
                     <ul id="tournament-players" class="list-group list-group-flush mb-3"></ul>
                     
-                    <div id="tournament-matches">
+                    <div id="tournament-matches" class="tournament-section">
                         <h5>Current Match</h5>
                         <div id="current-match" class="current-match-display mb-2">No active match</div>
                         
@@ -118,7 +166,7 @@
             </div>
             
             <!-- Available tournaments list -->
-            <div id="available-tournaments" class="card bg-transparent mt-3">
+            <div id="available-tournaments" class="card bg-transparent mt-3 tournament-section">
                 <div class="card-body">
                     <h4 class="card-title">Available Tournaments</h4>
                     <ul id="tournament-list" class="list-group list-group-flush">
@@ -355,9 +403,11 @@
     
     <!-- Utility Scripts -->
     <link rel="stylesheet" href="css/tournament-victory-style.css">
-    <script src="js/tournament-warning.js"></script>
     <script src="js/utils.js"></script>
     <script src="js/services.js"></script>
+    
+    <!-- Mobile Viewport Fix Script - Added for better mobile support -->
+    <script src="js/mobile-viewport-fix.js"></script>
     
     <!-- Core Modules -->
     <script src="js/localization.js"></script>
@@ -374,6 +424,7 @@
     <script src="js/tournament-fixes.js"></script>
     <script src="js/tournament-manager-updates.js"></script>
     <script src="js/tournament-fixes-init.js"></script>
+    <script src="js/tournament-warning.js"></script>
     
     <!-- Feature Modules -->
     <script src="js/player-stats-dashboard.js"></script>
