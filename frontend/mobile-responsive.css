@@ -1,0 +1,162 @@
+/* Responsive Mobile Menu Styles
+ * These styles ensure all menus are scrollable on small screens
+ * and adjust properly for mobile viewports.
+ */
+
+/* Make all pages scrollable on mobile with appropriate padding */
+.page {
+    overflow-y: auto;
+    max-height: 100vh;
+    padding-bottom: 20px;
+    -webkit-overflow-scrolling: touch; /* For smooth scrolling on iOS */
+}
+
+/* Ensure container fits viewport */
+#app {
+    height: auto;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    padding: 15px 15px 30px;
+}
+
+/* Add safe bottom area for iOS devices with notches */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+    #app {
+        padding-bottom: calc(30px + env(safe-area-inset-bottom));
+    }
+}
+
+/* Adjust page sizing for smaller screens */
+@media (max-height: 700px) {
+    .page {
+        max-height: 100vh;
+        padding-top: 10px;
+        padding-bottom: 10px;
+    }
+    
+    /* Reduce spacing between elements */
+    .mb-3 {
+        margin-bottom: 0.5rem !important;
+    }
+    
+    .mt-3 {
+        margin-top: 0.5rem !important;
+    }
+    
+    /* Make buttons slightly smaller */
+    .button {
+        padding: 0.375rem 0.75rem;
+        font-size: 0.95rem;
+    }
+    
+    /* Reduce header sizes */
+    h2 {
+        font-size: 1.5rem;
+        margin-bottom: 0.5rem;
+    }
+    
+    h3 {
+        font-size: 1.25rem;
+    }
+}
+
+/* Extreme small height screens (like landscape on old iPhones) */
+@media (max-height: 450px) {
+    /* Further reduce spacing */
+    .page {
+        padding-top: 5px;
+        padding-bottom: 5px;
+    }
+    
+    .mb-3, .my-3 {
+        margin-bottom: 0.25rem !important;
+    }
+    
+    .mt-3, .my-3 {
+        margin-top: 0.25rem !important;
+    }
+    
+    /* Smaller buttons and text */
+    .button {
+        padding: 0.25rem 0.5rem;
+        font-size: 0.85rem;
+    }
+    
+    h2 {
+        font-size: 1.25rem;
+        margin-bottom: 0.25rem;
+    }
+}
+
+/* Specific adjustments for tournament page which can get very tall */
+#tournament-page {
+    overflow-y: auto;
+    padding-bottom: 30px;
+}
+
+#active-tournament, 
+#available-tournaments {
+    margin-bottom: 10px;
+    overflow-y: auto;
+    max-height: 60vh;
+}
+
+#tournament-matches {
+    overflow-y: auto;
+    max-height: 40vh;
+}
+
+/* Card bodies should scroll internally on small screens */
+.card-body {
+    overflow-y: auto;
+    max-height: 60vh;
+}
+
+/* Make leaderboard scrollable */
+#leaderboard {
+    overflow-y: auto;
+    max-height: 65vh;
+}
+
+/* Adjustments for privacy policy page */
+#privacy-policy-page {
+    overflow-y: auto;
+    max-height: 100vh;
+}
+
+.privacy-content {
+    overflow-y: auto;
+    max-height: 70vh;
+}
+
+/* Fix for custom game page controls */
+#custom-game-page .customization-section {
+    overflow-y: auto;
+    max-height: 50vh;
+}
+
+/* Fix queue wrapper positioning for small screens */
+.queue-wrapper {
+    position: relative;
+    flex-wrap: wrap;
+}
+
+/* Mobile Joystick improvements */
+#mobile-joystick {
+    z-index: 2000 !important; /* Ensure it's above other UI elements */
+}
+
+/* Support for iPhone X and newer with notch */
+@supports (padding: max(0px)) {
+    #app {
+        padding-left: max(15px, env(safe-area-inset-left));
+        padding-right: max(15px, env(safe-area-inset-right));
+        padding-bottom: max(30px, env(safe-area-inset-bottom));
+    }
+    
+    /* Position mobile joystick above the bottom safe area */
+    #mobile-joystick {
+        bottom: calc(20px + env(safe-area-inset-bottom));
+    }
+}

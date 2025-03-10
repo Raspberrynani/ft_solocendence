@@ -1025,3 +1025,26 @@ body {
       background-color: rgba(255, 193, 7, 0.95);
   }
 }
+
+
+/* Logo styling */
+.logo-container {
+  margin-top: 20px;
+  margin-bottom: 30px;
+}
+
+.game-logo {
+  max-width: 100%;
+  height: auto;
+  filter: drop-shadow(0 0 10px rgba(0, 212, 255, 0.7));
+  animation: glow 2s infinite alternate;
+}
+
+@keyframes glow {
+  from {
+      filter: drop-shadow(0 0 5px rgba(0, 212, 255, 0.7));
+  }
+  to {
+      filter: drop-shadow(0 0 15px rgba(0, 212, 255, 1));
+  }
+}

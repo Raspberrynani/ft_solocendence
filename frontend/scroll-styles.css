@@ -1,0 +1,127 @@
+
+/* Scrollable Menu Styles */
+
+/* Scrollable containers */
+.scrollable-container {
+    max-height: 300px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    scrollbar-width: thin; /* For Firefox */
+    scrollbar-color: rgba(0, 212, 255, 0.5) rgba(0, 0, 0, 0.2); /* For Firefox */
+    margin-bottom: 10px;
+  }
+  
+  /* Make list containers scrollable */
+  .leaderboard-list, 
+  #tournament-players,
+  #waiting-players-list,
+  #tournament-list,
+  #upcoming-matches,
+  #completed-matches {
+    max-height: 300px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 212, 255, 0.5) rgba(0, 0, 0, 0.2);
+  }
+  
+  /* Custom scrollbar for Webkit browsers (Chrome, Safari, Edge) */
+  .scrollable-container::-webkit-scrollbar,
+  .leaderboard-list::-webkit-scrollbar,
+  #tournament-players::-webkit-scrollbar,
+  #waiting-players-list::-webkit-scrollbar,
+  #tournament-list::-webkit-scrollbar,
+  #upcoming-matches::-webkit-scrollbar,
+  #completed-matches::-webkit-scrollbar {
+    width: 6px;
+  }
+  
+  .scrollable-container::-webkit-scrollbar-track,
+  .leaderboard-list::-webkit-scrollbar-track,
+  #tournament-players::-webkit-scrollbar-track,
+  #waiting-players-list::-webkit-scrollbar-track,
+  #tournament-list::-webkit-scrollbar-track,
+  #upcoming-matches::-webkit-scrollbar-track,
+  #completed-matches::-webkit-scrollbar-track {
+    background: rgba(0, 0, 0, 0.2);
+    border-radius: 3px;
+  }
+  
+  .scrollable-container::-webkit-scrollbar-thumb,
+  .leaderboard-list::-webkit-scrollbar-thumb,
+  #tournament-players::-webkit-scrollbar-thumb,
+  #waiting-players-list::-webkit-scrollbar-thumb,
+  #tournament-list::-webkit-scrollbar-thumb,
+  #upcoming-matches::-webkit-scrollbar-thumb,
+  #completed-matches::-webkit-scrollbar-thumb {
+    background: rgba(0, 212, 255, 0.5);
+    border-radius: 3px;
+  }
+  
+  .scrollable-container::-webkit-scrollbar-thumb:hover,
+  .leaderboard-list::-webkit-scrollbar-thumb:hover,
+  #tournament-players::-webkit-scrollbar-thumb:hover,
+  #waiting-players-list::-webkit-scrollbar-thumb:hover,
+  #tournament-list::-webkit-scrollbar-thumb:hover,
+  #upcoming-matches::-webkit-scrollbar-thumb:hover,
+  #completed-matches::-webkit-scrollbar-thumb:hover {
+    background: rgba(0, 212, 255, 0.8);
+  }
+  
+  /* Responsive adjustments */
+  @media (max-height: 700px) {
+    .scrollable-container,
+    .leaderboard-list, 
+    #tournament-players,
+    #waiting-players-list,
+    #tournament-list,
+    #upcoming-matches,
+    #completed-matches {
+      max-height: 200px;
+    }
+  }
+  
+  @media (max-height: 500px) {
+    .scrollable-container,
+    .leaderboard-list, 
+    #tournament-players,
+    #waiting-players-list,
+    #tournament-list,
+    #upcoming-matches,
+    #completed-matches {
+      max-height: 150px;
+    }
+  }
+  
+  /* Special container for tournament page sections */
+  .tournament-scroll-container {
+    max-height: 200px;
+    overflow-y: auto;
+    scrollbar-width: thin;
+    scrollbar-color: rgba(0, 212, 255, 0.5) rgba(0, 0, 0, 0.2);
+    padding-right: 5px;
+  }
+  
+  /* Ensure cards can scroll but don't expand too large */
+  .card-body.scrollable {
+    overflow: visible;
+    padding-bottom: 0;
+  }
+  
+  /* Ensure list items are visible with enough contrast */
+  .list-group-item {
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    background-color: rgba(0, 0, 0, 0.3);
+  }
+  
+  /* Dynamic max-height based on screen size classes */
+  .max-height-sm {
+    max-height: 150px;
+  }
+  
+  .max-height-md {
+    max-height: 250px;
+  }
+  
+  .max-height-lg {
+    max-height: 350px;
+  }
