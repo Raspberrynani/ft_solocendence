@@ -201,6 +201,32 @@ const WebSocketManager = (function() {
     // Add enhanced debugging for tournament messages
     if (data.type.includes('tournament') || data.type === 'start_game') {
       console.log("WebSocket [TOURNAMENT DEBUG]:", data);
+      
+      // Special handling for tournament_update after a match
+      if (data.type === 'tournament_update' && data.tournament) {
+        // If we have TournamentManager, update it
+        if (window.TournamentManager) {
+          window.TournamentManager.handleTournamentUpdate(data.tournament);
+          
+          // If we're currently in a game but getting tournament updates,
+          // we might need to return to tournament view
+          if (document.getElementById('pong-page') && 
+              document.getElementById('pong-page').classList.contains('active')) {
+            console.log("Got tournament update while in game - checking if game is over");
+            
+            // If game is over, navigate back to tournament
+            if (!window.App.state.game.active) {
+              console.log("Game inactive but still on game page - returning to tournament view");
+              if (window.UIManager) {
+                setTimeout(() => {
+                  window.UIManager.navigateTo('tournament-page');
+                }, 300);
+              }
+            }
+          }
+        }
+        return;
+      }
     }
 
     // Map of message types to handler functions
@@ -227,7 +253,13 @@ const WebSocketManager = (function() {
                 console.error("Error saving game room:", e);
             }
         }
-        
+
+        // Mark if this is a tournament game for later reference
+        if (data.is_tournament && window.App && window.App.state && window.App.state.game) {
+          console.log("Setting tournament flag for current game");
+          window.App.state.game.isTournament = true;
+        }
+          
         if (gameCallbacks.onGameStart) {
           // Use timeout to ensure UI is ready
           setTimeout(() => {

@@ -271,25 +271,64 @@ const TournamentManager = (function() {
      * Play the current match (if it's the user's turn)
      */
     function playCurrentMatch() {
-        if (!currentTournament || !currentTournament.current_match) {
-            return;
+        // First, check if there's a current match in the tournament data
+        let matchToPlay = null;
+        
+        if (!currentTournament) {
+          showError("No active tournament");
+          return;
+        }
+        
+        if (currentTournament.current_match) {
+          matchToPlay = currentTournament.current_match;
+        } else if (currentTournament.matches) {
+          // Try to find the final match that should be played
+          const finalMatches = currentTournament.matches.filter(m => 
+            m.round === Math.ceil(Math.log2(currentTournament.size)) - 1 && 
+            m.player1 && m.player2 && !m.winner);
+          
+          if (finalMatches.length === 1) {
+            matchToPlay = {
+              player1: finalMatches[0].player1,
+              player2: finalMatches[0].player2
+            };
+          }
+        }
+        
+        if (!matchToPlay) {
+          showError("No match available to play");
+          return;
         }
         
         // Check if current user is part of the match
-        const currentMatch = currentTournament.current_match;
-        const isInMatch = checkIfPlayerInMatch(currentUsername, currentMatch);
+        const isInMatch = checkIfPlayerInMatch(currentUsername, matchToPlay);
         
         if (!isInMatch) {
-            showError("You are not part of the current match");
-            return;
+          showError("You are not part of the current match");
+          return;
         }
         
-        console.log("Starting match play");
+        console.log("Starting match play for tournament match:", matchToPlay);
         
-        // Hide tournament section and show game section
+        // Inform the server we're ready to play our match
+        if (window.WebSocketManager) {
+          WebSocketManager.send({
+            type: "ready_for_match",
+            tournament_id: currentTournament.id,
+            nickname: currentUsername
+          });
+        }
+        
+        // Set a flag in App state to indicate this is a tournament game
+        if (window.App && App.state && App.state.game) {
+          App.state.game.isTournament = true;
+          console.log("Tournament game flag set");
+        }
+        
+        // Navigate to game page
         navigateToGamePage();
     }
-    
+      
     /**
      * Check if a player is in a match
      * @param {string} playerName Player name to check
@@ -297,7 +336,7 @@ const TournamentManager = (function() {
      * @returns {boolean} True if player is in match
      */
     function checkIfPlayerInMatch(playerName, match) {
-        if (!match) return false;
+        if (!match || !playerName) return false;
         return match.player1 === playerName || match.player2 === playerName;
     }
     
@@ -418,29 +457,44 @@ const TournamentManager = (function() {
         
         // Only process updates for the current tournament
         if (!currentTournament || tournament.id !== currentTournament.id) {
-            return;
+          console.log("Received update for a different tournament or no current tournament");
+          return;
         }
         
         // Store previous state to check for changes
         const wasStarted = currentTournament.started;
         const previousCurrentMatch = currentTournament.current_match;
+        const previousWinner = currentTournament.winner;
         
         // Update tournament data
         currentTournament = tournament;
         
+        // If we're on a non-tournament page but should be viewing the tournament,
+        // navigate to the tournament page
+        const tournamentPage = document.getElementById("tournament-page");
+        if (tournamentPage && !tournamentPage.classList.contains("active")) {
+          console.log("Tournament update received while not on tournament page - navigating back");
+          if (window.UIManager && typeof UIManager.navigateTo === 'function') {
+            // Small delay to ensure all state is updated
+            setTimeout(() => {
+              UIManager.navigateTo("tournament-page");
+            }, 300);
+          }
+        }
+        
         // Check if tournament has started
         if (!wasStarted && tournament.started) {
-            // Show tournament bracket when tournament starts
-            showTournamentBracket();
+          // Show tournament bracket when tournament starts
+          showTournamentBracket();
         } else {
-            // Update UI based on current state
-            if (tournament.started) {
-                updateBracketDisplay();
-                updateCurrentMatchDisplay();
-                updateMatchResultsDisplay();
-            } else {
-                updateLobbyDisplay();
-            }
+          // Update UI based on current state
+          if (tournament.started) {
+            updateBracketDisplay();
+            updateCurrentMatchDisplay();
+            updateMatchResultsDisplay();
+          } else {
+            updateLobbyDisplay();
+          }
         }
         
         // Check if a new match has started with the current player
@@ -448,15 +502,16 @@ const TournamentManager = (function() {
             previousCurrentMatch.player1 !== tournament.current_match.player1 || 
             previousCurrentMatch.player2 !== tournament.current_match.player2)) {
             
-            const isInMatch = checkIfPlayerInMatch(currentUsername, tournament.current_match);
-            if (isInMatch) {
-                showYourMatchNotification();
-            }
+          const isInMatch = checkIfPlayerInMatch(currentUsername, tournament.current_match);
+          if (isInMatch) {
+            showYourMatchNotification();
+          }
         }
         
         // Check if tournament has ended and player is the winner
-        if (tournament.started && tournament.winner === currentUsername) {
-            showTournamentVictory();
+        if (tournament.started && tournament.winner === currentUsername && 
+            tournament.winner !== previousWinner) {
+          showTournamentVictory();
         }
     }
     
@@ -761,26 +816,90 @@ const TournamentManager = (function() {
         if (!currentTournament) return;
         
         if (currentTournament.current_match) {
-            // Show current match
-            elements.currentMatchSection.style.display = "block";
-            elements.currentMatchPlayer1.textContent = sanitizeHTML(currentTournament.current_match.player1);
-            elements.currentMatchPlayer2.textContent = sanitizeHTML(currentTournament.current_match.player2);
-            
-            // Check if current user is in the match
-            const isInMatch = checkIfPlayerInMatch(currentUsername, currentTournament.current_match);
-            elements.yourMatchIndicator.style.display = isInMatch ? "block" : "none";
+          // Show current match
+          elements.currentMatchSection.style.display = "block";
+          elements.currentMatchPlayer1.textContent = sanitizeHTML(currentTournament.current_match.player1);
+          elements.currentMatchPlayer2.textContent = sanitizeHTML(currentTournament.current_match.player2);
+          
+          // Check if current user is in the match
+          const isInMatch = checkIfPlayerInMatch(currentUsername, currentTournament.current_match);
+          elements.yourMatchIndicator.style.display = isInMatch ? "block" : "none";
         } else {
-            // No current match
-            if (currentTournament.winner) {
-                // Tournament is over
-                elements.currentMatchSection.style.display = "none";
-            } else {
-                // Tournament is in progress but no active match
-                elements.currentMatchSection.style.display = "block";
-                elements.currentMatchPlayer1.textContent = "Waiting";
-                elements.currentMatchPlayer2.textContent = "Waiting";
-                elements.yourMatchIndicator.style.display = "none";
+          // No current match
+          if (currentTournament.winner) {
+            // Tournament is over
+            elements.currentMatchSection.style.display = "none";
+          } else {
+            // Tournament is in progress but no active match - attempt to find a final match
+            elements.currentMatchSection.style.display = "block";
+            
+            // Try to find the final match that should be played
+            if (currentTournament.matches) {
+              // Look for a final match (one with no "next_match") that has both players but no winner
+              const finalMatches = currentTournament.matches.filter(m => 
+                m.round === Math.ceil(Math.log2(currentTournament.size)) - 1 && 
+                m.player1 && m.player2 && !m.winner);
+              
+              if (finalMatches.length === 1) {
+                // Found a potential final match
+                const finalMatch = finalMatches[0];
+                console.log("Found potential final match:", finalMatch);
+                
+                // Show this match as the "current match"
+                elements.currentMatchPlayer1.textContent = sanitizeHTML(finalMatch.player1);
+                elements.currentMatchPlayer2.textContent = sanitizeHTML(finalMatch.player2);
+                
+                // Check if current user is in this match
+                const isInMatch = finalMatch.player1 === currentUsername || finalMatch.player2 === currentUsername;
+                elements.yourMatchIndicator.style.display = isInMatch ? "block" : "none";
+                
+                // Add a special class to indicate this is a waiting final match
+                elements.currentMatchSection.classList.add("final-match-waiting");
+                
+                // Add a click handler to the whole section to potentially trigger the match
+                elements.currentMatchSection.onclick = function() {
+                  if (isInMatch) {
+                    // Try to force the final match to start by sending a manual request
+                    if (window.WebSocketManager) {
+                      console.log("Attempting to force start final match");
+                      WebSocketManager.send({
+                        type: "request_final_match",
+                        tournament_id: currentTournament.id
+                      });
+                    }
+                    
+                    // Also try to start the match via normal means
+                    playCurrentMatch();
+                  }
+                };
+                
+                return;
+              }
             }
+            
+            // Default display if no match found
+            elements.currentMatchPlayer1.textContent = "Waiting";
+            elements.currentMatchPlayer2.textContent = "Waiting";
+            elements.yourMatchIndicator.style.display = "none";
+            
+            // Add a refresh button for matches
+            if (!document.getElementById('refresh-matches-btn')) {
+              const refreshBtn = document.createElement('button');
+              refreshBtn.id = 'refresh-matches-btn';
+              refreshBtn.className = 'btn btn-sm btn-info mt-2';
+              refreshBtn.innerHTML = 'Refresh Matches';
+              refreshBtn.onclick = function() {
+                // Request updated tournament state from server
+                if (window.WebSocketManager) {
+                  WebSocketManager.send({
+                    type: "get_tournament_state",
+                    tournament_id: currentTournament.id
+                  });
+                }
+              };
+              elements.currentMatchSection.appendChild(refreshBtn);
+            }
+          }
         }
     }
     

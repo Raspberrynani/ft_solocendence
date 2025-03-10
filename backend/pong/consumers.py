@@ -224,7 +224,21 @@ class Tournament:
         next_match = self.find_next_match()
         
         if not next_match:
-            # Tournament is complete
+            # No available match, but check for a special case:
+            # - First round matches are done
+            # - Final match should be created but hasn't been activated
+            
+            # Find matches where both players are known but winner is None
+            final_matches = [m for m in self.matches 
+                        if m["next_match"] is None and m["winner"] is None]
+                        
+            # If we have a potential final match that's ready to play
+            if final_matches and len(final_matches) == 1 and final_matches[0]["player1"] and final_matches[0]["player2"]:
+                next_match = final_matches[0]
+                logger.info(f"Found final match ready to play: {next_match['player1']} vs {next_match['player2']}")
+        
+        if not next_match:
+            # Tournament is complete or no valid next match
             # Find the winner (winner of the final match)
             final_match = next((m for m in self.matches if m["next_match"] is None and m["winner"] is not None), None)
             if final_match:
@@ -232,20 +246,31 @@ class Tournament:
             
             return False
         
+        # Double-check that both players are set
+        if not next_match["player1"] or not next_match["player2"] or not next_match["player1_channel"] or not next_match["player2_channel"]:
+            logger.warning(f"Incomplete match found, cannot set as current: {next_match}")
+            return False
+        
         # Set as current match
         self.current_match = next_match
+        logger.info(f"Advanced tournament to match: {next_match['player1']} vs {next_match['player2']}")
         return True
     
     def find_next_match(self):
         """Find the next match that's ready to be played"""
-        # Find matches where both players are known and no winner yet
+        # First, look for matches where both players are known and no winner yet
+        ready_matches = []
         for match in self.matches:
             if (match["player1"] and match["player2"] and 
                 match["player1_channel"] and match["player2_channel"] and
                 match["winner"] is None):
-                return match
-                
-        return None
+                ready_matches.append(match)
+        
+        # Sort matches by round (lower rounds first)
+        ready_matches.sort(key=lambda m: m["round"])
+        
+        # Return the first available match if any
+        return ready_matches[0] if ready_matches else None
     
     def record_match_result(self, winner_channel):
         """Record the result of the current match"""
@@ -283,7 +308,7 @@ class Tournament:
             
             # Find the next match
             next_match = next((m for m in self.matches 
-                             if m["round"] == next_round and m["position"] == next_position), None)
+                            if m["round"] == next_round and m["position"] == next_position), None)
             
             if next_match:
                 # Determine which player slot to fill
@@ -294,9 +319,29 @@ class Tournament:
                     next_match["player2"] = winner_nickname
                     next_match["player2_channel"] = winner_channel
         
-        # Clear current match
+        # Store current match for return value
         current_match = self.current_match
+        
+        # Clear current match BEFORE calling advance_tournament
+        # This is important to avoid potential issues
         self.current_match = None
+        
+        # Force the tournament to advance after a short delay
+        # This ensures all match updates are processed before advancing
+        import asyncio
+        async def delayed_advance():
+            await asyncio.sleep(0.5)
+            # Try to advance the tournament
+            if not self.advance_tournament() and not self.winner:
+                # If advance_tournament didn't work or set a winner, check for final match manually
+                final_matches = [m for m in self.matches if m["next_match"] is None]
+                if final_matches and len(final_matches) == 1 and final_matches[0]["player1"] and final_matches[0]["player2"]:
+                    # We have a valid final match that should be set as current
+                    self.current_match = final_matches[0]
+                    logger.info(f"Forcing final match: {self.current_match['player1']} vs {self.current_match['player2']}")
+        
+        # Schedule the delayed advancement (will be executed by the event loop)
+        asyncio.create_task(delayed_advance())
         
         # Calculate if tournament is complete
         if not self.advance_tournament() and not self.winner:
@@ -589,6 +634,92 @@ class PongConsumer(AsyncWebsocketConsumer):
         await self.channel_layer.group_discard("lobby", self.channel_name)
         logger.info(f"WebSocket disconnected: {self.channel_name}")
 
+    async def start_tournament_match(self, tournament, match):
+        """Start a match within a tournament"""
+        player1_channel = match["player1_channel"]
+        player2_channel = match["player2_channel"]
+        player1_nickname = match["player1"]
+        player2_nickname = match["player2"]
+        
+        logger.info(f"Starting tournament match: {player1_nickname} vs {player2_nickname}")
+        
+        # Create a new game room for this match
+        tourney_game_room = "tourney_game_" + str(uuid.uuid4())
+        
+        # Create server-side game
+        game = game_manager.create_game(tourney_game_room, target_rounds=tournament.rounds)
+        
+        # Add players to the game
+        left_side = game_manager.add_player_to_game(tourney_game_room, player1_channel, "left")
+        right_side = game_manager.add_player_to_game(tourney_game_room, player2_channel, "right")
+        
+        if not left_side or not right_side:
+            logger.error(f"Failed to add players to tournament game - left: {left_side}, right: {right_side}")
+            # Try to recover
+            if not left_side:
+                logger.error(f"Trying to re-add player1 {player1_nickname} to game")
+                game_manager.add_player_to_game(tourney_game_room, player1_channel, "left")
+            if not right_side:
+                logger.error(f"Trying to re-add player2 {player2_nickname} to game")
+                game_manager.add_player_to_game(tourney_game_room, player2_channel, "right")
+        
+        logger.info(f"Added players to tournament game: left={player1_channel}, right={player2_channel}")
+        
+        # Add to channel group
+        await self.channel_layer.group_add(tourney_game_room, player1_channel)
+        await self.channel_layer.group_add(tourney_game_room, player2_channel)
+        
+        # Store room mapping
+        active_games[player1_channel] = tourney_game_room
+        active_games[player2_channel] = tourney_game_room
+        
+        # Start the game with a small delay to ensure players are ready
+        await asyncio.sleep(0.5)
+        success = game_manager.start_game(tourney_game_room)
+        if not success:
+            logger.error(f"Failed to start tournament game: {tourney_game_room}")
+            # Try once more after a short delay
+            await asyncio.sleep(1.0)
+            success = game_manager.start_game(tourney_game_room)
+            if not success:
+                logger.error(f"Failed second attempt to start tournament game: {tourney_game_room}")
+                return
+        
+        logger.info(f"Tournament game started: {success}")
+        
+        # Set up state sync loop for this game
+        asyncio.create_task(self.game_sync_loop(tourney_game_room))
+        
+        # Start game for both players
+        match_message = f"Tournament match: {player1_nickname} vs {player2_nickname}"
+        
+        await self.channel_layer.send(
+            player1_channel,
+            {
+                "type": "start_game",
+                "message": match_message,
+                "room": tourney_game_room,
+                "rounds": tournament.rounds,
+                "is_tournament": True,
+                "player_side": "left"
+            }
+        )
+        
+        # Add small delay between messages to prevent race conditions
+        await asyncio.sleep(0.1)
+        
+        await self.channel_layer.send(
+            player2_channel,
+            {
+                "type": "start_game",
+                "message": match_message,
+                "room": tourney_game_room,
+                "rounds": tournament.rounds,
+                "is_tournament": True,
+                "player_side": "right"
+            }
+        )
+
     async def receive(self, text_data):
         global waiting_players, active_games, tournament_players, active_tournaments
         
@@ -709,6 +840,83 @@ class PongConsumer(AsyncWebsocketConsumer):
             elif msg_type == "get_tournaments":
                 await self.broadcast_tournament_list()
             
+            # New tournament-specific messages
+            elif msg_type == "get_tournament_state":
+                tournament_id = data.get("tournament_id")
+                
+                if tournament_id in active_tournaments:
+                    tournament = active_tournaments[tournament_id]
+                    await self.send(text_data=json.dumps({
+                        "type": "tournament_update",
+                        "tournament": tournament.get_state()
+                    }))
+            
+            elif msg_type == "request_final_match":
+                tournament_id = data.get("tournament_id")
+                
+                if tournament_id in active_tournaments:
+                    tournament = active_tournaments[tournament_id]
+                    
+                    # Force tournament to advance if possible
+                    if tournament.advance_tournament():
+                        logger.info(f"Forced tournament {tournament_id} to advance to next match")
+                        
+                        # Notify all players in tournament about the update
+                        for player in tournament.players:
+                            try:
+                                await self.channel_layer.send(
+                                    player["channel"],
+                                    {
+                                        "type": "tournament_update",
+                                        "tournament": tournament.get_state()
+                                    }
+                                )
+                            except Exception as e:
+                                logger.error(f"Error sending tournament update: {e}")
+                        
+                        # If there's a current match, start it
+                        if tournament.current_match:
+                            await self.start_tournament_match(tournament, tournament.current_match)
+                    else:
+                        logger.warning(f"Failed to force tournament {tournament_id} to advance")
+            
+            elif msg_type == "ready_for_match":
+                tournament_id = data.get("tournament_id")
+                nickname = data.get("nickname")
+                
+                if tournament_id in active_tournaments:
+                    tournament = active_tournaments[tournament_id]
+                    
+                    # If no current match but we can find a ready match, set it
+                    if not tournament.current_match:
+                        # Try to find a match that has this player
+                        potential_match = None
+                        for match in tournament.matches:
+                            if (match["player1"] == nickname or match["player2"] == nickname) and match["winner"] is None:
+                                if match["player1"] and match["player2"] and match["player1_channel"] and match["player2_channel"]:
+                                    potential_match = match
+                                    break
+                        
+                        if potential_match:
+                            logger.info(f"Setting match with {nickname} as current match")
+                            tournament.current_match = potential_match
+                            
+                            # Notify all players in tournament about the update
+                            for player in tournament.players:
+                                try:
+                                    await self.channel_layer.send(
+                                        player["channel"],
+                                        {
+                                            "type": "tournament_update",
+                                            "tournament": tournament.get_state()
+                                        }
+                                    )
+                                except Exception as e:
+                                    logger.error(f"Error sending tournament update: {e}")
+                            
+                            # Start the match
+                            await self.start_tournament_match(tournament, tournament.current_match)
+            
             # Client disconnect notification - graceful exit
             elif msg_type == "client_disconnect":
                 logger.info(f"Client requested disconnect: {self.channel_name}")
@@ -754,6 +962,9 @@ class PongConsumer(AsyncWebsocketConsumer):
             logger.error("Invalid JSON received")
         except Exception as e:
             logger.error(f"Error processing message: {e}")
+            # Add traceback for better debugging
+            import traceback
+            logger.error(traceback.format_exc())
 
     #----------------
     # Tournament Methods
