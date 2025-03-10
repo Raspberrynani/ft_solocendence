@@ -54,7 +54,6 @@ const TournamentManager = (function() {
         // Main sections
         elements.tournamentSelection = document.getElementById("tournament-selection");
         elements.tournamentLobby = document.getElementById("tournament-lobby");
-        elements.tournamentBracket = document.getElementById("tournament-bracket");
         elements.availableTournamentsSection = document.getElementById("available-tournaments-section");
         elements.tournamentVictory = document.getElementById("tournament-victory");
         elements.tournamentEliminated = document.getElementById("tournament-eliminated");
@@ -74,8 +73,7 @@ const TournamentManager = (function() {
         elements.leaveTournamentBtn = document.getElementById("leave-tournament-btn");
         elements.startTournamentBtn = document.getElementById("start-tournament-btn");
         
-        // Tournament bracket elements
-        elements.bracketSvg = document.getElementById("bracket-svg");
+        // Current match elements
         elements.currentMatchSection = document.getElementById("current-match-section");
         elements.currentMatchPlayer1 = document.getElementById("current-match-player1");
         elements.currentMatchPlayer2 = document.getElementById("current-match-player2");
@@ -484,12 +482,11 @@ const TournamentManager = (function() {
         
         // Check if tournament has started
         if (!wasStarted && tournament.started) {
-          // Show tournament bracket when tournament starts
-          showTournamentBracket();
+          // Show match info when tournament starts
+          showTournamentMatches();
         } else {
           // Update UI based on current state
           if (tournament.started) {
-            updateBracketDisplay();
             updateCurrentMatchDisplay();
             updateMatchResultsDisplay();
           } else {
@@ -539,11 +536,20 @@ const TournamentManager = (function() {
     function showTournamentLobby() {
         // Hide other sections
         elements.tournamentSelection.style.display = "none";
-        elements.tournamentBracket.style.display = "none";
         elements.availableTournamentsSection.style.display = "none";
         
         // Show lobby
         elements.tournamentLobby.style.display = "block";
+        
+        // If there's a container for match results, hide it
+        if (elements.matchResultsSection) {
+            elements.matchResultsSection.style.display = "none";
+        }
+        
+        // If there's a container for current match, hide it
+        if (elements.currentMatchSection) {
+            elements.currentMatchSection.style.display = "none";
+        }
         
         // Update lobby display
         updateLobbyDisplay();
@@ -627,186 +633,29 @@ const TournamentManager = (function() {
     }
     
     /**
-     * Show tournament bracket UI
+     * Show tournament matches and current match info (replaces bracket)
      */
-    function showTournamentBracket() {
+    function showTournamentMatches() {
         // Hide other sections
         elements.tournamentSelection.style.display = "none";
         elements.tournamentLobby.style.display = "none";
         elements.availableTournamentsSection.style.display = "none";
         
-        // Show bracket
-        elements.tournamentBracket.style.display = "block";
+        // Show current match section
+        if (elements.currentMatchSection) {
+            elements.currentMatchSection.style.display = "block";
+        }
         
-        // Update bracket display
-        updateBracketDisplay();
+        // Show match results section if there are completed matches
+        if (elements.matchResultsSection) {
+            elements.matchResultsSection.style.display = "block";
+        }
+        
+        // Update current match display
         updateCurrentMatchDisplay();
-    }
-    
-    /**
-     * Update the tournament bracket display
-     */
-    function updateBracketDisplay() {
-        if (!currentTournament || !elements.bracketSvg) return;
         
-        // Clear existing SVG content
-        elements.bracketSvg.innerHTML = '';
-        
-        // Set SVG dimensions based on tournament size
-        const svgWidth = 800;
-        const svgHeight = currentTournament.size <= 4 ? 300 : 
-                         currentTournament.size <= 6 ? 400 : 500;
-        
-        elements.bracketSvg.setAttribute('width', svgWidth);
-        elements.bracketSvg.setAttribute('height', svgHeight);
-        
-        // Draw bracket based on tournament structure
-        drawTournamentBracket(currentTournament);
-    }
-    
-    /**
-     * Draw the tournament bracket
-     * @param {Object} tournament Tournament data
-     */
-    function drawTournamentBracket(tournament) {
-        const svg = elements.bracketSvg;
-        const width = parseInt(svg.getAttribute('width'));
-        const height = parseInt(svg.getAttribute('height'));
-        
-        // Determine bracket layout based on tournament size
-        const size = tournament.size || 8;
-        const rounds = Math.ceil(Math.log2(size));
-        const matchesPerRound = [];
-        
-        // Calculate matches per round
-        let remainingPlayers = size;
-        for (let i = 0; i < rounds; i++) {
-            const roundMatches = Math.floor(remainingPlayers / 2);
-            matchesPerRound.push(roundMatches);
-            remainingPlayers = roundMatches;
-        }
-        
-        // Set spacing parameters
-        const nodePadding = 10;
-        const nodeWidth = 140;
-        const nodeHeight = 40;
-        const horizontalSpacing = width / (rounds + 1);
-        
-        // Track nodes for drawing connections
-        const nodes = [];
-        
-        // Draw each round
-        for (let round = 0; round < rounds; round++) {
-            const roundMatches = matchesPerRound[round];
-            const verticalSpacing = height / (roundMatches + 1);
-            
-            // Draw nodes for this round
-            for (let match = 0; match < roundMatches; match++) {
-                const x = horizontalSpacing * (round + 1);
-                const y = verticalSpacing * (match + 1);
-                
-                // Create group for the match
-                const matchGroup = document.createElementNS("http://www.w3.org/2000/svg", "g");
-                matchGroup.setAttribute("class", "bracket-match");
-                
-                // Draw match node
-                const rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
-                rect.setAttribute("x", x - nodeWidth / 2);
-                rect.setAttribute("y", y - nodeHeight / 2);
-                rect.setAttribute("width", nodeWidth);
-                rect.setAttribute("height", nodeHeight);
-                rect.setAttribute("rx", 5);
-                rect.setAttribute("ry", 5);
-                rect.setAttribute("class", "bracket-node");
-                rect.setAttribute("fill", "rgba(0, 0, 0, 0.3)");
-                rect.setAttribute("stroke", "rgba(255, 255, 255, 0.2)");
-                
-                // Store node info for drawing connections
-                nodes.push({
-                    round,
-                    match,
-                    x,
-                    y,
-                    width: nodeWidth,
-                    height: nodeHeight
-                });
-                
-                // Get match data if available
-                let matchData = null;
-                if (tournament.matches) {
-                    matchData = tournament.matches.find(m => m.round === round && m.position === match);
-                }
-                
-                // Add match text
-                const text = document.createElementNS("http://www.w3.org/2000/svg", "text");
-                text.setAttribute("x", x);
-                text.setAttribute("y", y);
-                text.setAttribute("class", "bracket-text");
-                text.setAttribute("dominant-baseline", "middle");
-                
-                if (matchData) {
-                    // Match has data
-                    if (matchData.winner) {
-                        // Match is complete
-                        text.textContent = matchData.winner;
-                        text.classList.add("bracket-text-winner");
-                    } else {
-                        // Match is scheduled
-                        text.textContent = `${matchData.player1} vs ${matchData.player2}`;
-                    }
-                } else {
-                    // No match data yet
-                    text.textContent = "TBD";
-                }
-                
-                // Add elements to SVG
-                matchGroup.appendChild(rect);
-                matchGroup.appendChild(text);
-                svg.appendChild(matchGroup);
-            }
-        }
-        
-        // Draw connections between rounds
-        for (let round = 1; round < rounds; round++) {
-            const prevRoundMatches = matchesPerRound[round - 1];
-            const thisRoundMatches = matchesPerRound[round];
-            
-            for (let match = 0; match < thisRoundMatches; match++) {
-                // Find target node
-                const targetNode = nodes.find(n => n.round === round && n.match === match);
-                
-                // Find source nodes (2 nodes from previous round)
-                const sourceNodes = [];
-                const matchesPerWinner = prevRoundMatches / thisRoundMatches;
-                
-                for (let i = 0; i < matchesPerWinner; i++) {
-                    const sourceMatchIndex = match * matchesPerWinner + i;
-                    const sourceNode = nodes.find(n => n.round === round - 1 && n.match === sourceMatchIndex);
-                    if (sourceNode) {
-                        sourceNodes.push(sourceNode);
-                    }
-                }
-                
-                // Draw lines from source nodes to target node
-                sourceNodes.forEach(sourceNode => {
-                    const line = document.createElementNS("http://www.w3.org/2000/svg", "path");
-                    const startX = sourceNode.x + nodeWidth / 2;
-                    const startY = sourceNode.y;
-                    const endX = targetNode.x - nodeWidth / 2;
-                    const endY = targetNode.y;
-                    
-                    // Create curved path
-                    const controlX = (startX + endX) / 2;
-                    const d = `M ${startX} ${startY} C ${controlX} ${startY}, ${controlX} ${endY}, ${endX} ${endY}`;
-                    
-                    line.setAttribute("d", d);
-                    line.setAttribute("class", "bracket-line");
-                    line.setAttribute("fill", "none");
-                    
-                    svg.insertBefore(line, svg.firstChild);
-                });
-            }
-        }
+        // Update match results list
+        updateMatchResultsDisplay();
     }
     
     /**
@@ -1069,7 +918,15 @@ const TournamentManager = (function() {
         // Reset UI
         elements.tournamentSelection.style.display = "block";
         elements.tournamentLobby.style.display = "none";
-        elements.tournamentBracket.style.display = "none";
+        
+        if (elements.currentMatchSection) {
+            elements.currentMatchSection.style.display = "none";
+        }
+        
+        if (elements.matchResultsSection) {
+            elements.matchResultsSection.style.display = "none";
+        }
+        
         elements.tournamentVictory.style.display = "none";
         elements.tournamentEliminated.style.display = "none";
         
