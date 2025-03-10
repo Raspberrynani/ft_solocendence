@@ -281,31 +281,31 @@ const ErrorHandler = (function() {
       // const sizeDetected = (widthDiff > threshold || heightDiff > threshold);
 
       // Method 2: Debugger timing check
-      // let debuggerDetected = false;
-      // const now = Date.now();
-      // if (now - lastCheck > 1000) { // check at most once every second
-      //   lastCheck = now;
-      //   const start = performance.now();
-      //   debugger; // This statement may slow down execution if DevTools are open
-      //   const end = performance.now();
-      //   debuggerDetected = (end - start > 50); // if delay exceeds 50ms, flag it
-      // }
+      let debuggerDetected = false;
+      const now = Date.now();
+      if (now - lastCheck > 1000) { // check at most once every second
+        lastCheck = now;
+        const start = performance.now();
+        debugger; // This statement may slow down execution if DevTools are open
+        const end = performance.now();
+        debuggerDetected = (end - start > 50); // if delay exceeds 50ms, flag it
+      }
 
-      // // Method 3: toString override trick
-      // let toStringDetected = false;
-      // const dummy = {
-      //   toString: function() {
-      //     toStringDetected = true;
-      //     return '';
-      //   }
-      // };
-      // // Force stringification by logging dummy object.
-      // console.log(dummy);
+      // Method 3: toString override trick
+      let toStringDetected = false;
+      const dummy = {
+        toString: function() {
+          toStringDetected = true;
+          return '';
+        }
+      };
+      // Force stringification by logging dummy object.
+      console.log(dummy);
 
-      // // Combine results from all methods.
-      // const detected = debuggerDetected || toStringDetected;
-      // isDevToolsOpen = detected;
-      // return detected;
+      // Combine results from all methods.
+      const detected = debuggerDetected || toStringDetected;
+      isDevToolsOpen = detected;
+      return detected;
     }
 
     /**

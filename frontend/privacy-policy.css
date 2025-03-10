@@ -1,102 +1,97 @@
+/* Add to existing CSS file */
+:root {
+  --primary-color: #00d4ff;
+  --secondary-color: #87CEEB;
+  --bg-dark: rgba(0, 0, 0, 0.5);
+  --text-light: rgba(255, 255, 255, 0.8);
+  --border-light: rgba(0, 212, 255, 0.2);
+}
+
 /* Privacy Policy Page Styles */
+#privacy-policy-page > * {
+  margin-left: auto;
+  margin-right: auto;
+  width: 100%;
+  max-width: 90%;
+}
 
-/* Add these styles to your CSS file */
+#privacy-policy-page h2 {
+  margin-bottom: 20px;
+}
 
-/* Center the entire privacy policy page */
-
-  
-  /* Center all direct children of the privacy policy page */
-  #privacy-policy-page > * {
-    margin-left: auto;
-    margin-right: auto;
-    width: 100%;
-    max-width: 90%;
-  }
-  
-  /* Additional styling for better presentation */
-  #privacy-policy-page h2 {
-    margin-bottom: 20px;
-  }
-  
-  /* Ensure back button is centered */
-  #privacy-back-button {
-    display: block;
-    margin: 20px auto;
-    max-width: 90%;
-  }
+#privacy-back-button {
+  display: block;
+  margin: 20px auto;
+  max-width: 90%;
+}
 
 .privacy-content {
-    background: rgba(0, 0, 0, 0.5);
-    border-radius: 10px;
-    padding: 15px;
-    margin: 0 auto 20px;  /* Center horizontally with auto margins */
-    border: 1px solid rgba(0, 212, 255, 0.2);
-    max-height: 60vh;
-    overflow-y: auto;
-    text-align: center;  /* Center the text content */
-    max-width: 90%;  /* Control the width */
-  }
-  
-  /* Ensure section headings are centered */
+  background: var(--bg-dark);
+  border-radius: 10px;
+  padding: 15px;
+  margin: 0 auto 20px;
+  border: 1px solid var(--border-light);
+  max-height: 60vh;
+  overflow-y: auto;
+  text-align: center;
+  max-width: 90%;
+}
+
 .privacy-section h3 {
-    color: #00d4ff;
-    font-size: 18px;
-    margin-bottom: 10px;
-    text-align: center;
-  }
-  
-  .privacy-section p {
-    font-size: 14px;
-    line-height: 1.5;
-    color: rgba(255, 255, 255, 0.8);
-    text-align: center;
-  }
-  
-  
-  .privacy-section ul {
-    display: inline-block;
-    text-align: left;
-    margin: 0 auto 15px;
-    padding-left: 20px;
-  }
-  
-  .delete-data-form {
-    background: rgba(0, 0, 0, 0.3);
-    border-radius: 10px;
-    padding: 15px;
-    border: 1px solid rgba(255, 117, 140, 0.3);
-    margin: 0 auto;
-    max-width: 90%;
-  }
-  
-  .verification-code {
-    font-family: monospace;
-    font-size: 18px;
-    background: rgba(0, 0, 0, 0.3);
-    padding: 10px;
-    border-radius: 5px;
-    margin: 10px 0;
-    user-select: all;
-    text-align: center;
-    color: #00d4ff;
-    letter-spacing: 2px;
-  }
-  
-  /* Make input fields centered */
+  color: var(--primary-color);
+  font-size: 18px;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
+.privacy-section p {
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--text-light);
+  text-align: center;
+}
+
+.privacy-section ul {
+  display: inline-block;
+  text-align: left;
+  margin: 0 auto 15px;
+  padding-left: 20px;
+}
+
+.delete-data-form {
+  background: rgba(0, 0, 0, 0.3);
+  border-radius: 10px;
+  padding: 15px;
+  border: 1px solid rgba(255, 117, 140, 0.3);
+  margin: 0 auto;
+  max-width: 90%;
+}
+
+.verification-code {
+  font-family: monospace;
+  font-size: 18px;
+  background: rgba(0, 0, 0, 0.3);
+  padding: 10px;
+  border-radius: 5px;
+  margin: 10px 0;
+  user-select: all;
+  text-align: center;
+  color: var(--primary-color);
+  letter-spacing: 2px;
+}
+
 .delete-data-form .form-control {
-    margin: 0 auto;
-    max-width: 90%;
-  }
-  
-  /* Center the delete result message */
-  #delete-result {
-    transition: all 0.3s ease-in-out;
-    margin: 0 auto 15px;
-    max-width: 90%;
-    text-align: center;
-  }
-  
-/* Center buttons */
+  margin: 0 auto;
+  max-width: 90%;
+}
+
+#delete-result {
+  transition: all 0.3s ease-in-out;
+  margin: 0 auto 15px;
+  max-width: 90%;
+  text-align: center;
+}
+
 .delete-data-form button, 
 #privacy-back-button {
   display: block;
@@ -104,30 +99,105 @@
   max-width: 90%;
 }
 
+/* Alert Overrides */
+.alert {
+  background-color: var(--bg-dark);
+  border-color: rgba(255, 255, 255, 0.2);
+  color: var(--text-light);
+}
 
-  /* Override Bootstrap alert styles */
-  .alert {
-    background-color: rgba(0, 0, 0, 0.5);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: rgba(255, 255, 255, 0.8);
+.alert-warning { 
+  background-color: rgba(255, 193, 7, 0.1);
+  border-color: rgba(255, 193, 7, 0.3);
+}
+
+.alert-danger { 
+  background-color: rgba(220, 53, 69, 0.1);
+  border-color: rgba(220, 53, 69, 0.3);
+}
+
+.alert-success { 
+  background-color: rgba(40, 167, 69, 0.1);
+  border-color: rgba(40, 167, 69, 0.3);
+}
+
+.alert-info { 
+  background-color: rgba(0, 212, 255, 0.1);
+  border-color: rgba(0, 212, 255, 0.3);
+}
+
+/* Safe Zone for Bottom of Page */
+.safe-zone {
+  height: 100px; /* Adjust as needed */
+  width: 100%;
+  background: transparent;
+}
+
+/* Ensure scrollable content has safe zone */
+#privacy-policy-page {
+  padding-bottom: 100px; /* Match safe zone height */
+}
+
+/* Privacy Policy Page Fixes */
+#privacy-policy-page {
+  max-height: none !important; /* Remove max-height restriction */
+  overflow-y: auto; /* Enable scrolling if needed */
+  padding-bottom: 20px; /* Add some padding at the bottom */
+}
+
+/* Ensure the privacy content has sufficient width */
+.privacy-content {
+  width: 100%;
+  max-width: 100%;
+  margin: 0 auto;
+  padding: 0 10px; /* Add some padding on the sides */
+}
+
+/* Make the privacy sections more responsive */
+.privacy-section {
+  width: 100%;
+  margin-bottom: 15px;
+}
+
+/* Improve text readability */
+.privacy-section p, 
+.privacy-section ul {
+  margin-bottom: 10px;
+  line-height: 1.5;
+}
+
+/* Fix the delete form to ensure it's fully visible */
+.delete-data-form {
+  width: 100%;
+  margin-bottom: 15px;
+}
+
+/* Make the deletion result alert more prominent */
+#delete-result {
+  width: 100%;
+  margin-top: 10px;
+  margin-bottom: 15px;
+}
+
+/* Ensure the back button is always visible */
+#privacy-back-button {
+  margin-top: 15px;
+  margin-bottom: 20px;
+}
+
+/* Add responsive adjustments for mobile */
+@media (max-width: 576px) {
+  .privacy-content {
+      padding: 0 5px;
   }
   
-  .alert-warning {
-    background-color: rgba(255, 193, 7, 0.1);
-    border-color: rgba(255, 193, 7, 0.3);
+  .privacy-section h3 {
+      font-size: 1.25rem;
   }
   
-  .alert-danger {
-    background-color: rgba(220, 53, 69, 0.1);
-    border-color: rgba(220, 53, 69, 0.3);
+  /* Enhance mobile usability for form inputs */
+  #delete-nickname, 
+  #verification-input {
+      font-size: 16px; /* Prevents iOS zoom on focus */
   }
-  
-  .alert-success {
-    background-color: rgba(40, 167, 69, 0.1);
-    border-color: rgba(40, 167, 69, 0.3);
-  }
-  
-  .alert-info {
-    background-color: rgba(0, 212, 255, 0.1);
-    border-color: rgba(0, 212, 255, 0.3);
-  }
+}
