@@ -156,7 +156,7 @@
                 </div>
             </div>
             
-            <!-- Tournament Lobby (initially hidden) -->
+            <!-- Tournament Lobby -->
             <div id="tournament-lobby" class="card bg-transparent mb-3" style="display: none;">
                 <div class="card-body">
                     <h4 class="card-title">Tournament Lobby: <span id="tournament-lobby-name">-</span></h4>
@@ -180,12 +180,12 @@
                 </div>
             </div>
             
-            <!-- Tournament Matches Section -->
-            <div class="card bg-transparent mb-3" style="display: none;">
+            <!-- Tournament Matches Section (New) -->
+            <div id="tournament-matches-card" class="card bg-transparent mb-3" style="display: none;">
                 <div class="card-body">
                     <!-- Current Match -->
                     <div id="current-match-section" class="mt-3">
-                        <h5>Current Match</h5>
+                        <h5 class="text-center mb-3">Current Match</h5>
                         <div id="current-match-card" class="card bg-dark text-white p-3">
                             <div class="d-flex justify-content-between align-items-center">
                                 <div class="player-card">
@@ -205,10 +205,28 @@
                         </div>
                     </div>
                     
-                    <!-- Match Results (initially hidden) -->
-                    <div id="match-results-section" class="mt-3" style="display: none;">
-                        <h5>Match Results</h5>
-                        <ul id="match-results-list" class="list-group list-group-flush"></ul>
+                    <!-- Upcoming Matches Section -->
+                    <div id="upcoming-matches-section" class="mt-3">
+                        <h5 class="text-center mb-3">Upcoming Matches</h5>
+                        <ul id="upcoming-matches-list" class="list-group list-group-flush scrollable-container">
+                            <li class="list-group-item text-center">No upcoming matches yet</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Match Results -->
+                    <div id="match-results-section" class="mt-3">
+                        <h5 class="text-center mb-3">Completed Matches</h5>
+                        <ul id="match-results-list" class="list-group list-group-flush scrollable-container">
+                            <li class="list-group-item text-center">No matches completed yet</li>
+                        </ul>
+                    </div>
+                    
+                    <!-- Tournament Progress -->
+                    <div id="tournament-status" class="text-center mt-3">
+                        <div class="progress">
+                            <div id="tournament-progress-bar" class="progress-bar bg-success" role="progressbar" style="width: 0%"></div>
+                        </div>
+                        <small class="text-muted mt-1">Tournament Progress</small>
                     </div>
                 </div>
             </div>
@@ -253,19 +271,6 @@
             <!-- Back Button -->
             <button id="tournament-back-btn" data-navigate="game-page" class="btn btn-secondary w-100 mt-3">Back to Menu</button>
         </section>
-
-        
-        <!-- Victory Screen Template (will be inserted dynamically when needed) -->
-        <template id="tournament-victory-template">
-            <div class="result-screen winner">
-            <div class="tournament-victory">
-                <h2>🏆 TOURNAMENT CHAMPION! 🏆</h2>
-                <h3>Congratulations! You've won the tournament!</h3>
-                <p class="victory-message">You have defeated all opponents and claimed victory.</p>
-                <button class="button" id="victory-continue">CONTINUE</button>
-            </div>
-            </div>
-        </template>
   
 
         <!-- Custom Game Page -->
@@ -512,9 +517,8 @@
     <script src="js/tournament-manager.js"></script>
     <script src="js/tournament-websocket-connector.js"></script>
     <script src="js/tournament-integration.js"></script>
-
-
-
+    <script src="js/tournament-ui-enhancements.js"></script>
+    
     <!-- Background Pong Script -->
     <script src="js/easter-egg.js"></script>
 
