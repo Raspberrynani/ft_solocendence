@@ -1,293 +1,236 @@
 /**
- * Tournament Integration Script
- * Connects the SimpleTournamentManager to the main application
- * and handles navigation between the main menu and tournament page.
+ * Tournament Integration Module
+ * Integrates the tournament system with the main application
  */
 (function() {
-    // Wait for DOM to be fully loaded
-    document.addEventListener('DOMContentLoaded', function() {
-      console.log('Tournament Integration: Initializing');
-      
-      // Check if the SimpleTournamentManager exists
-      if (!window.SimpleTournamentManager) {
-        console.error('SimpleTournamentManager not found');
-        return;
-      }
-      
-      // Check if App exists
-      if (!window.App) {
-        console.error('App not found');
-        return;
-      }
-      
-      // Initialize UI elements
-      initializeTournamentUI();
-      
-      // Set up event handlers for tournament navigation
-      setupTournamentNavigation();
-      
-      // Connect WebSocket handlers to SimpleTournamentManager
-      connectWebSocketHandlers();
-      
-      // Handle game over events for tournaments
-      overrideGameOverHandler();
-      
-      console.log('Tournament Integration: Initialization complete');
-    });
+    // Wait for document to be ready
+    document.addEventListener("DOMContentLoaded", initTournamentIntegration);
     
     /**
-     * Initialize tournament UI elements
+     * Initialize tournament integration
      */
-    function initializeTournamentUI() {
-      // Find the tournament option in the game mode selector
-      const gameModes = document.querySelectorAll('.game-mode-indicator');
-      gameModes.forEach(mode => {
-        if (mode.textContent.includes('Tournament')) {
-          // Store the index for tournament mode
-          window.tournamentModeIndex = Array.from(gameModes).indexOf(mode);
-        }
-      });
+    function initTournamentIntegration() {
+      console.log("Tournament Integration: Initializing...");
       
-      // Ensure the tournament rounds input exists
-      const roundsInput = document.getElementById('tournament-rounds-input');
-      if (!roundsInput && document.getElementById('tournament-page')) {
-        // If missing, create it dynamically
-        const input = document.createElement('input');
-        input.id = 'tournament-rounds-input';
-        input.type = 'number';
-        input.value = '3';
-        input.min = '1';
-        input.max = '9';
-        input.className = 'form-control mb-3';
-        
-        // Find the appropriate place to insert it
-        const createBtn = document.getElementById('create-tournament');
-        if (createBtn && createBtn.parentNode) {
-          createBtn.parentNode.insertBefore(input, createBtn);
-        }
+      // Wait for App and required modules to be available
+      if (!window.App || !window.TournamentManager || !window.TournamentWebSocketConnector) {
+        console.log("Tournament Integration: Waiting for required modules...");
+        setTimeout(initTournamentIntegration, 100);
+        return;
       }
+      
+      // Modify the main menu to add tournament option
+      setupGameModeSelection();
+      
+      // Connect Tournament system with game over handling
+      enhanceGameOverHandler();
+      
+      // Add style for match alert animation
+      addTournamentStyles();
+      
+      console.log("Tournament Integration: Initialized successfully");
     }
     
     /**
-     * Set up event handlers for tournament navigation
+     * Set up game mode selection to handle tournament mode
      */
-    function setupTournamentNavigation() {
-      // Handle navigation to tournament page from main menu
-      const startGameBtn = document.getElementById('start-game');
-      if (startGameBtn) {
-        const originalClickHandler = startGameBtn.onclick;
-        
-        startGameBtn.onclick = function(e) {
-          // Get the current game mode
-          const gameMode = getCurrentGameMode();
-          
-          // If tournament mode is selected
-          if (gameMode === 'tournament') {
-            e.preventDefault();
-            
-            // Get nickname from input
-            const nickname = document.getElementById('nickname').value.trim();
-            
-            // Validate nickname
-            if (!nickname) {
-              showError('Please enter your nickname to join a tournament');
-              return;
-            }
-            
-            // Navigate to tournament page
-            if (window.UIManager && typeof UIManager.navigateTo === 'function') {
-              UIManager.navigateTo('tournament-page');
-              
-              // Initialize SimpleTournamentManager with nickname
-              const elements = getTournamentElements();
-              SimpleTournamentManager.init(elements, nickname);
-            }
-          } else if (originalClickHandler) {
-            // For other game modes, use the original handler
-            originalClickHandler.call(this, e);
-          }
-        };
-      }
+    function setupGameModeSelection() {
+      // Update the start game button click handler to handle tournament mode
+      const startGameBtn = document.getElementById("start-game");
+      if (!startGameBtn) return;
       
-      // Handle back button from tournament page
-      const backButton = document.getElementById('tournament-back-button');
-      if (backButton) {
-        backButton.onclick = function(e) {
+      const originalClickHandler = startGameBtn.onclick;
+      
+      startGameBtn.onclick = function(e) {
+        // Get current game mode
+        const currentMode = getCurrentGameMode();
+        
+        // If tournament mode is selected
+        if (currentMode === "tournament") {
           e.preventDefault();
           
-          // Check if player is in a tournament
-          if (SimpleTournamentManager.isInTournament()) {
-            // Confirm before leaving
-            if (confirm('Leaving will remove you from the current tournament. Continue?')) {
-              SimpleTournamentManager.leaveTournament();
-              navigateToMainMenu();
-            }
-          } else {
-            navigateToMainMenu();
+          // Get nickname
+          const nickname = document.getElementById("nickname").value.trim();
+          
+          // Validate nickname
+          if (!nickname) {
+            showError("Please enter a nickname to participate in a tournament");
+            return;
           }
-        };
-      }
-    }
-    
-    /**
-     * Connect WebSocket handlers to SimpleTournamentManager
-     */
-    function connectWebSocketHandlers() {
-      // Store original WebSocket methods
-      if (window.WebSocketManager) {
-        const originalReceive = WebSocketManager.receive;
-        
-        // Enhance with tournament handlers
-        if (typeof originalReceive === 'function') {
-          WebSocketManager.receive = function(event) {
-            // Call original handler
-            originalReceive.call(WebSocketManager, event);
-            
-            try {
-              const data = JSON.parse(event.data);
-              
-              // Route tournament-related messages to SimpleTournamentManager
-              switch (data.type) {
-                case 'tournament_list':
-                  SimpleTournamentManager.updateTournamentList(data.tournaments);
-                  break;
-                case 'tournament_created':
-                  SimpleTournamentManager.handleTournamentCreated(data.tournament);
-                  break;
-                case 'tournament_joined':
-                  SimpleTournamentManager.handleTournamentJoined(data.tournament);
-                  break;
-                case 'tournament_update':
-                  SimpleTournamentManager.handleTournamentUpdate(data.tournament);
-                  break;
-                case 'tournament_left':
-                  SimpleTournamentManager.handleTournamentLeft();
-                  break;
-                case 'tournament_error':
-                  SimpleTournamentManager.handleTournamentError(data.message);
-                  break;
-              }
-            } catch (error) {
-              console.error('Error processing WebSocket message:', error);
-            }
-          };
+          
+          // Initialize Tournament Manager if not already initialized
+          if (window.TournamentManager) {
+            TournamentManager.init({
+              username: nickname,
+              websocket: window.WebSocketManager
+            });
+          }
+          
+          // Initialize WebSocket Connector
+          if (window.TournamentWebSocketConnector) {
+            TournamentWebSocketConnector.init({
+              webSocket: window.WebSocketManager,
+              tournamentManager: window.TournamentManager
+            });
+          }
+          
+          // Navigate to tournament page
+          if (window.UIManager) {
+            UIManager.navigateTo("tournament-page");
+          }
+        } else if (typeof originalClickHandler === "function") {
+          // For other modes, use original handler
+          originalClickHandler.call(this, e);
         }
-      }
+      };
     }
     
     /**
-     * Override the game over handler to handle tournament games
+     * Enhance the game over handler to support tournaments
      */
-    function overrideGameOverHandler() {
-      // Store original game over handler
-      if (window.App && App.handleGameOver) {
-        const originalGameOver = App.handleGameOver;
+    function enhanceGameOverHandler() {
+      // Store original game over handler if available
+      if (!window.App || !App.handleGameOver) return;
+      
+      const originalGameOver = App.handleGameOver;
+      
+      // Override with enhanced version
+      App.handleGameOver = function(score, winner) {
+        console.log(`Enhanced handleGameOver called: score=${score}, winner=${winner}`);
         
-        // Override with enhanced version
-        App.handleGameOver = function(score, winner) {
-          console.log(`Enhanced handleGameOver called: score=${score}, winner=${winner}`);
+        // Check if this is a tournament game
+        if (App.state && App.state.game && App.state.game.isTournament) {
+          console.log("Tournament game over detected");
           
-          // Check if this is a tournament game
-          if (App.state && App.state.game && App.state.game.isTournament) {
-            console.log('Tournament game over - determining winner status');
-            
-            // Determine if current player won based on playerSide
-            const playerSide = App.state.game.playerSide || 'left';
-            const playerWon = (playerSide === 'left' && winner === 'left') || 
-                            (playerSide === 'right' && winner === 'right');
-            
-            console.log(`Tournament result: playerSide=${playerSide}, winner=${winner}, playerWon=${playerWon}`);
-            
-            // Send game over to WebSocket to notify tournament system
-            if (App.modules && App.modules.websocket) {
-              App.modules.websocket.sendGameOver(score);
-            }
-            
-            // Stop the game
-            if (App.state.game.isMultiplayer && window.ServerPong) {
-              ServerPong.stop();
-            } else if (window.PongGame) {
-              PongGame.stop();
-            }
-            
-            // Exit fullscreen if active
-            if (typeof App.exitFullscreen === 'function') {
-              App.exitFullscreen();
-            }
-            
-            // Check if this was the final tournament match and player won
-            const isFinalMatch = SimpleTournamentManager.isTournamentComplete();
-            
-            if (playerWon && isFinalMatch) {
-              // Show tournament victory screen
-              console.log("Tournament final victory - showing victory screen");
-              showTournamentVictoryScreen();
-              return;
-            } else {
-              // Regular tournament match end
-              if (playerWon) {
-                showSuccess('Match won! Waiting for next match...');
-              } else {
-                showSuccess('Match lost. Tournament complete for you.');
-                // Non-winners should exit the tournament
-                SimpleTournamentManager.resetTournamentState();
-              }
-              
-              // Navigate back to tournament page
-              setTimeout(() => {
-                if (window.UIManager) {
-                  UIManager.navigateTo('tournament-page');
-                }
-              }, 500);
-              return;
-            }
+          // Determine if current player won
+          const playerSide = App.state.game.playerSide || "left";
+          const playerWon = (playerSide === "left" && winner === "left") || 
+                           (playerSide === "right" && winner === "right");
+          
+          console.log(`Tournament result: playerSide=${playerSide}, winner=${winner}, playerWon=${playerWon}`);
+          
+          // Send game over to WebSocket to notify tournament system
+          if (App.modules && App.modules.websocket) {
+            App.modules.websocket.sendGameOver(score);
           }
           
-          // For non-tournament games, call the original handler
-          originalGameOver.call(App, score, winner);
-        };
-      }
+          // Stop the game
+          const isMultiplayer = App.state?.game?.isMultiplayer || false;
+          if (isMultiplayer && window.ServerPong) {
+            ServerPong.stop();
+          } else if (window.PongGame) {
+            PongGame.stop();
+          }
+          
+          // Exit fullscreen if needed
+          if (typeof App.exitFullscreen === "function") {
+            App.exitFullscreen();
+          }
+          
+          // After short delay, navigate based on result
+          setTimeout(() => {
+            // Check if tournament is complete and player won
+            const tournamentComplete = window.TournamentManager && TournamentManager.isTournamentComplete();
+            
+            if (playerWon) {
+              if (tournamentComplete) {
+                // Show tournament victory screen
+                showTournamentVictory();
+              } else {
+                // Navigate back to tournament page
+                if (window.UIManager) {
+                  UIManager.navigateTo("tournament-page");
+                }
+                
+                // Show success message
+                showSuccess("Match won! Waiting for next match...");
+              }
+            } else {
+              // Player lost - show message
+              showSuccess("Match lost. Tournament complete for you.");
+              
+              // Reset tournament state
+              if (window.TournamentManager) {
+                TournamentManager.resetTournamentState();
+              }
+              
+              // Navigate back to main menu
+              if (window.UIManager) {
+                UIManager.navigateTo("game-page");
+              }
+            }
+          }, 500);
+          
+          return; // Skip original handler
+        }
+        
+        // Not a tournament game, call original handler
+        originalGameOver.apply(App, [score, winner]);
+      };
     }
     
     /**
      * Show tournament victory screen
      */
-    function showTournamentVictoryScreen() {
-      // Create victory screen from template
-      const template = document.getElementById('tournament-victory-template');
-      if (!template) {
-        console.error('Tournament victory template not found');
-        return;
+    function showTournamentVictory() {
+      if (!window.TournamentManager) return;
+      
+      const tournamentStats = {
+        matchesPlayed: 0,
+        totalPlayers: 0
+      };
+      
+      // Calculate stats if tournament data is available
+      if (TournamentManager.getCurrentTournament) {
+        const tournament = TournamentManager.getCurrentTournament();
+        if (tournament) {
+          tournamentStats.matchesPlayed = (tournament.completed_matches || []).length;
+          tournamentStats.totalPlayers = (tournament.players || []).length;
+        }
       }
       
-      // Clone template content
-      const victoryScreen = document.importNode(template.content, true).firstElementChild;
-      document.body.appendChild(victoryScreen);
+      // Get current player's nickname
+      const currentUsername = document.getElementById("nickname")?.value?.trim() || "You";
       
-      // Add continue button handler
-      document.getElementById('victory-continue').addEventListener('click', () => {
-        victoryScreen.remove();
+      // Show tournament result
+      TournamentManager.showTournamentResult(currentUsername, tournamentStats);
+      
+      // Reset tournament state after a delay
+      setTimeout(() => {
+        TournamentManager.resetTournamentState();
         
-        // Reset tournament state
-        SimpleTournamentManager.resetTournamentState();
-        
-        // Navigate back to menu
-        navigateToMainMenu();
-      });
+        // Navigate back to main menu
+        if (window.UIManager) {
+          UIManager.navigateTo("game-page");
+        }
+      }, 5000);
     }
     
     /**
-     * Navigate back to the main menu
+     * Add tournament-specific styles
      */
-    function navigateToMainMenu() {
-      if (window.UIManager && typeof UIManager.navigateTo === 'function') {
-        UIManager.navigateTo('game-page');
-      }
+    function addTournamentStyles() {
+      if (document.getElementById("tournament-integration-styles")) return;
+      
+      const style = document.createElement("style");
+      style.id = "tournament-integration-styles";
+      style.textContent = `
+        @keyframes matchAlert {
+          0%, 100% { background-color: rgba(0, 0, 0, 0.8); }
+          50% { background-color: rgba(255, 153, 0, 0.2); }
+        }
+        
+        .match-alert {
+          animation: matchAlert 1s ease-in-out 3;
+        }
+      `;
+      
+      document.head.appendChild(style);
     }
     
     /**
-     * Get the current game mode
-     * @returns {string} - Current game mode
+     * Get the current game mode from App state
+     * @returns {string} Current game mode ID
      */
     function getCurrentGameMode() {
       if (window.App && App.state && App.state.ui) {
@@ -299,39 +242,18 @@
         }
       }
       
-      return 'classic'; // Default to classic mode
-    }
-    
-    /**
-     * Get references to tournament UI elements
-     * @returns {Object} - Element references
-     */
-    function getTournamentElements() {
-      return {
-        createTournament: document.getElementById('create-tournament'),
-        startTournament: document.getElementById('start-tournament'),
-        leaveTournament: document.getElementById('leave-tournament'),
-        tournamentName: document.getElementById('tournament-name'),
-        tournamentPlayers: document.getElementById('tournament-players'),
-        currentMatch: document.getElementById('current-match'),
-        upcomingMatches: document.getElementById('upcoming-matches'),
-        completedMatches: document.getElementById('completed-matches'),
-        tournamentList: document.getElementById('tournament-list'),
-        activeTournament: document.getElementById('active-tournament'),
-        availableTournaments: document.getElementById('available-tournaments'),
-        roundsInput: document.getElementById('tournament-rounds-input') || document.getElementById('rounds-input')
-      };
+      return "classic"; // Default to classic mode
     }
     
     /**
      * Show an error message
-     * @param {string} message - Error message
+     * @param {string} message Error message to display
      */
     function showError(message) {
       if (window.Utils && Utils.showAlert) {
-        Utils.showAlert(message, 'warning');
+        Utils.showAlert(message, "warning");
       } else if (window.App && App.showError) {
-        App.showError(message, 'warning');
+        App.showError(message, "warning");
       } else {
         alert(message);
       }
@@ -339,16 +261,15 @@
     
     /**
      * Show a success message
-     * @param {string} message - Success message
+     * @param {string} message Success message to display
      */
     function showSuccess(message) {
       if (window.Utils && Utils.showToast) {
-        Utils.showToast(message, 'success');
+        Utils.showToast(message, "success");
       } else if (window.App && App.showToast) {
-        App.showToast(message, 'success');
+        App.showToast(message, "success");
       } else {
         console.log(message);
       }
     }
-    
   })();
