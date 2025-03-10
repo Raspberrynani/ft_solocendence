@@ -1,13 +1,13 @@
 import json
 import uuid
 import asyncio
-from channels.generic.websocket import AsyncWebsocketConsumer
 import logging
 import time
 import math
 import random
 import threading
 from datetime import datetime
+from channels.generic.websocket import AsyncWebsocketConsumer
 
 from api.metrics import (
     GAME_STARTED, GAME_COMPLETED, GAME_DURATION, 
@@ -27,22 +27,22 @@ active_games = {}  # Maps channel_name to game room
 active_tournaments = {}  # Maps tournament_id to Tournament object
 tournament_players = {}  # Maps channel_name to tournament_id
 
-
 class Tournament:
     """
-    Simple tournament system for Pong matches.
-    Supports even number of players (2-10) in a bracket format.
+    Enhanced tournament system for Pong matches.
+    Supports 4, 6, or 8 player tournaments with a bracket structure.
     """
-    def __init__(self, id, creator_channel, name="Tournament"):
+    def __init__(self, id, creator_channel, name="Tournament", size=8):
         self.id = id
         self.name = name
         self.creator_channel = creator_channel
+        self.size = size  # Total number of players (4, 6, or 8)
         self.players = []  # List of {channel, nickname}
-        self.matches = []  # Pending matches queue
-        self.current_match = None  # Currently active match
-        self.completed_matches = []  # Finished matches with results
         self.started = False
         self.rounds = 3  # Default rounds per match
+        self.matches = []  # All matches (past, current, upcoming)
+        self.current_match = None  # Currently active match
+        self.winner = None  # Tournament winner
     
     def add_player(self, channel, nickname):
         """Add a player to the tournament"""
@@ -58,8 +58,8 @@ class Tournament:
         if any(p["channel"] == channel for p in self.players):
             return False
         
-        # Maximum 10 players
-        if len(self.players) >= 10:
+        # Check if tournament is full
+        if len(self.players) >= self.size:
             return False
         
         self.players.append({"channel": channel, "nickname": nickname})
@@ -83,70 +83,168 @@ class Tournament:
         # If tournament has started, handle match updates
         if self.started and self.current_match:
             # If player was in current match, cancel it
-            if channel in [self.current_match["player1"]["channel"], 
-                          self.current_match["player2"]["channel"]]:
-                self.current_match = None
-                # Move to next match
-                self.advance_tournament()
-        
-        # Update upcoming matches
-        self.matches = [m for m in self.matches if 
-                        m["player1"]["channel"] != channel and 
-                        m["player2"]["channel"] != channel]
+            if (self.current_match.get("player1_channel") == channel or 
+                self.current_match.get("player2_channel") == channel):
+                # Auto-win for other player
+                other_player = None
+                other_nickname = None
+                
+                if self.current_match.get("player1_channel") == channel:
+                    other_player = self.current_match.get("player2_channel")
+                    other_nickname = self.current_match.get("player2")
+                else:
+                    other_player = self.current_match.get("player1_channel")
+                    other_nickname = self.current_match.get("player1")
+                
+                if other_player:
+                    # Mark match as complete with other player as winner
+                    self.record_match_result(other_player)
         
         return True
     
     def start_tournament(self):
-        """Start the tournament by creating matches"""
+        """Start the tournament by creating bracket structure"""
         # Validate we can start
         if self.started:
             return False
             
-        if len(self.players) < 2:
-            return False  # Need at least 2 players
-        
-        # Require even number of players
-        if len(self.players) % 2 != 0:
+        # Check for valid player count (4, 6, or 8)
+        if len(self.players) not in [4, 6, 8]:
             return False
-            
-        # Enforce maximum of 10 players
-        if len(self.players) > 10:
+        
+        # Even number of players required
+        if len(self.players) % 2 != 0:
             return False
         
         # Reset tournament state
         self.matches = []
         self.current_match = None
-        self.completed_matches = []
+        self.winner = None
         
         # Shuffle players for random matchups
         shuffled_players = self.players.copy()
         random.shuffle(shuffled_players)
         
-        # Create initial pairings (0 vs 1, 2 vs 3, etc.)
-        for i in range(0, len(shuffled_players), 2):
-            if i + 1 < len(shuffled_players):
-                self.matches.append({
-                    "player1": shuffled_players[i],
-                    "player2": shuffled_players[i+1],
-                    "status": "pending"
-                })
+        # Calculate rounds needed based on player count
+        rounds_needed = math.ceil(math.log2(len(shuffled_players)))
+        
+        # Create bracket structure
+        self.create_bracket(shuffled_players, rounds_needed)
         
         self.started = True
         
         # Start first match
         return self.advance_tournament()
     
+    def create_bracket(self, players, rounds):
+        """Create a tournament bracket structure based on player count"""
+        player_count = len(players)
+        
+        # Create initial round matches
+        first_round_matches = player_count // 2
+        
+        # Handle byes for non-power-of-2 player counts
+        if player_count & (player_count - 1) != 0:  # Not a power of 2
+            # Calculate how many byes we need
+            next_power_of_2 = 2 ** rounds
+            byes_needed = next_power_of_2 - player_count
+            
+            # Assign byes to certain positions (advance directly to next round)
+            # This is implemented by creating fewer first-round matches
+            first_round_matches = (player_count - byes_needed) // 2
+        
+        # Create first round matches
+        match_id = 0
+        for i in range(first_round_matches):
+            player1 = players[i * 2]
+            player2 = players[i * 2 + 1]
+            
+            self.matches.append({
+                "id": match_id,
+                "round": 0,  # First round (0-indexed)
+                "position": i,  # Position in the round
+                "player1": player1["nickname"],
+                "player2": player2["nickname"],
+                "player1_channel": player1["channel"],
+                "player2_channel": player2["channel"],
+                "winner": None,
+                "next_match": self.calculate_next_match(0, i, first_round_matches)
+            })
+            match_id += 1
+        
+        # If we have byes, create "virtual matches" for second round
+        if first_round_matches < player_count // 2:
+            bye_players = players[first_round_matches * 2:]
+            second_round_positions = player_count // 4
+            
+            for i, player in enumerate(bye_players):
+                # Calculate position in second round
+                position = i // 2
+                
+                # Check if we need to create a new match or add to existing one
+                existing_match = next((m for m in self.matches if m["round"] == 1 and m["position"] == position), None)
+                
+                if existing_match:
+                    # Add as second player to existing match
+                    existing_match["player2"] = player["nickname"]
+                    existing_match["player2_channel"] = player["channel"]
+                else:
+                    # Create new match with this player
+                    self.matches.append({
+                        "id": match_id,
+                        "round": 1,  # Second round (0-indexed)
+                        "position": position,
+                        "player1": player["nickname"],
+                        "player2": None,  # Will be filled by winner of a first-round match
+                        "player1_channel": player["channel"],
+                        "player2_channel": None,
+                        "winner": None,
+                        "next_match": self.calculate_next_match(1, position, second_round_positions)
+                    })
+                    match_id += 1
+    
+    def calculate_next_match(self, current_round, position, matches_in_round):
+        """Calculate the ID of the next match in the bracket"""
+        if matches_in_round <= 1:
+            return None  # Final match has no next match
+            
+        next_round = current_round + 1
+        next_position = position // 2
+        
+        return {"round": next_round, "position": next_position}
+    
     def advance_tournament(self):
         """Move to the next match in the tournament"""
-        if not self.matches:
+        # If there's a current match, do nothing until it's completed
+        if self.current_match:
+            return False
+            
+        # Find the next match to play
+        next_match = self.find_next_match()
+        
+        if not next_match:
             # Tournament is complete
-            self.current_match = None
+            # Find the winner (winner of the final match)
+            final_match = next((m for m in self.matches if m["next_match"] is None and m["winner"] is not None), None)
+            if final_match:
+                self.winner = final_match["winner"]
+            
             return False
         
-        # Get next match
-        self.current_match = self.matches.pop(0)
-        self.current_match["status"] = "active"
+        # Set as current match
+        self.current_match = next_match
         return True
+    
+    def find_next_match(self):
+        """Find the next match that's ready to be played"""
+        # Find matches where both players are known and no winner yet
+        for match in self.matches:
+            if (match["player1"] and match["player2"] and 
+                match["player1_channel"] and match["player2_channel"] and
+                match["winner"] is None):
+                return match
+                
+        return None
     
     def record_match_result(self, winner_channel):
         """Record the result of the current match"""
@@ -154,30 +252,67 @@ class Tournament:
             return False
         
         # Verify this player is in the current match
-        if winner_channel != self.current_match["player1"]["channel"] and winner_channel != self.current_match["player2"]["channel"]:
+        is_player1 = winner_channel == self.current_match["player1_channel"]
+        is_player2 = winner_channel == self.current_match["player2_channel"]
+        
+        if not (is_player1 or is_player2):
             return False
         
-        # Find winner nickname
+        # Determine winner and loser
         winner_nickname = None
-        for player in self.players:
-            if player["channel"] == winner_channel:
-                winner_nickname = player["nickname"]
-                break
+        loser_nickname = None
+        loser_channel = None
         
-        if not winner_nickname:
-            return False
+        if is_player1:
+            winner_nickname = self.current_match["player1"]
+            loser_nickname = self.current_match["player2"]
+            loser_channel = self.current_match["player2_channel"]
+        else:
+            winner_nickname = self.current_match["player2"]
+            loser_nickname = self.current_match["player1"]
+            loser_channel = self.current_match["player1_channel"]
         
-        # Record winner
+        # Update current match with winner
         self.current_match["winner"] = winner_nickname
-        self.current_match["winner_channel"] = winner_channel
-        self.current_match["status"] = "completed"
-        self.completed_matches.append(self.current_match)
+        
+        # Update next match if there is one
+        if self.current_match["next_match"]:
+            next_round = self.current_match["next_match"]["round"]
+            next_position = self.current_match["next_match"]["position"]
+            
+            # Find the next match
+            next_match = next((m for m in self.matches 
+                             if m["round"] == next_round and m["position"] == next_position), None)
+            
+            if next_match:
+                # Determine which player slot to fill
+                if next_match["player1"] is None:
+                    next_match["player1"] = winner_nickname
+                    next_match["player1_channel"] = winner_channel
+                else:
+                    next_match["player2"] = winner_nickname
+                    next_match["player2_channel"] = winner_channel
         
         # Clear current match
+        current_match = self.current_match
         self.current_match = None
         
-        # Advance to next match
-        return self.advance_tournament()
+        # Calculate if tournament is complete
+        if not self.advance_tournament() and not self.winner:
+            # Find if we have a winner
+            final_match = next((m for m in self.matches if m["next_match"] is None and m["winner"] is not None), None)
+            if final_match:
+                self.winner = final_match["winner"]
+        
+        # Return the match result for notifications
+        return {
+            "match": current_match,
+            "winner": winner_nickname,
+            "winner_channel": winner_channel,
+            "loser": loser_nickname,
+            "loser_channel": loser_channel,
+            "tournament_complete": self.winner is not None
+        }
     
     def get_state(self):
         """Get the current state of the tournament for clients"""
@@ -185,301 +320,35 @@ class Tournament:
         current_match_data = None
         if self.current_match:
             current_match_data = {
-                "player1": self.current_match["player1"]["nickname"],
-                "player2": self.current_match["player2"]["nickname"]
+                "player1": self.current_match["player1"],
+                "player2": self.current_match["player2"]
             }
         
-        # Format upcoming matches
-        upcoming_matches = []
+        # Format player list
+        players = [p["nickname"] for p in self.players]
+        
+        # Get match data for bracket display
+        matches_data = []
         for match in self.matches:
-            upcoming_matches.append({
-                "player1": match["player1"]["nickname"],
-                "player2": match["player2"]["nickname"]
-            })
-        
-        # Format completed matches
-        completed = []
-        for match in self.completed_matches:
-            completed.append({
-                "player1": match["player1"]["nickname"],
-                "player2": match["player2"]["nickname"],
+            match_data = {
+                "round": match["round"],
+                "position": match["position"],
+                "player1": match["player1"],
+                "player2": match["player2"],
                 "winner": match["winner"]
-            })
-        
-        # Build winners list based on completed matches
-        winners = []
-        for match in self.completed_matches:
-            if "winner" in match and match["winner"] not in winners:
-                winners.append(match["winner"])
+            }
+            matches_data.append(match_data)
         
         return {
             "id": self.id,
             "name": self.name,
-            "players": [p["nickname"] for p in self.players],
+            "size": self.size,
+            "players": players,
             "started": self.started,
             "current_match": current_match_data,
-            "upcoming_matches": upcoming_matches,
-            "completed_matches": completed,
-            "winners": winners
+            "matches": matches_data,
+            "winner": self.winner
         }
-
-# Server-side Pong Game implementation
-class PongGame:
-    """
-    Server-side implementation of Pong game logic.
-    """
-    def __init__(self, room_id, target_rounds=3, on_game_over=None):
-        # Game identification
-        self.room_id = room_id
-        self.target_rounds = target_rounds
-        self.on_game_over = on_game_over
-        self.game_start_time = None
-        
-        # Canvas dimensions (based on standard client width/height)
-        self.width = 800
-        self.height = 450
-        
-        # Game state
-        self.is_running = False
-        self.left_score = 0
-        self.right_score = 0
-        self.winner = None
-        
-        # Ball properties
-        self.ball_radius = 10
-        self.ball_x = self.width / 2
-        self.ball_y = self.height / 2
-        self.ball_speed = 5
-        self.ball_vx = self.ball_speed * (1 if random.random() > 0.5 else -1)
-        self.ball_vy = self.ball_speed * (random.random() - 0.5)
-        
-        # Paddle properties
-        self.paddle_width = 15
-        self.paddle_height = 100
-        self.left_paddle_y = (self.height - self.paddle_height) / 2
-        self.right_paddle_y = (self.height - self.paddle_height) / 2
-        self.paddle_speed = 7
-        
-        # Game loop properties
-        self.fps = 60
-        self.frame_duration = 1.0 / self.fps
-        self.last_frame_time = 0
-        self.game_thread = None
-        self.lock = threading.Lock()
-        
-        # Player connections
-        self.left_player = None
-        self.right_player = None
-        
-        # Special features
-        self.speed_increment = 0.2
-        
-        logger.info(f"Game created: room={room_id}, rounds={target_rounds}")
-
-    def add_player(self, channel_name, player_side=None):
-        """Add a player to the game"""
-        with self.lock:
-            if player_side == "left" or (player_side is None and self.left_player is None):
-                self.left_player = channel_name
-                return "left"
-            elif player_side == "right" or (player_side is None and self.right_player is None):
-                self.right_player = channel_name
-                return "right"
-            else:
-                return None  # No space for player
-
-    def remove_player(self, channel_name):
-        """Remove a player from the game"""
-        with self.lock:
-            if self.left_player == channel_name:
-                self.left_player = None
-                return True
-            elif self.right_player == channel_name:
-                self.right_player = None
-                return True
-            return False
-
-    def update_paddle(self, channel_name, y_position):
-        """Update paddle position for a player"""
-        with self.lock:
-            # Validate y_position is within bounds
-            y_position = max(0, min(self.height - self.paddle_height, y_position))
-            
-            if channel_name == self.left_player:
-                self.left_paddle_y = y_position
-            elif channel_name == self.right_player:
-                self.right_paddle_y = y_position
-
-    def reset_ball(self):
-        """Reset ball to center with random direction"""
-        self.ball_x = self.width / 2
-        self.ball_y = self.height / 2
-        angle = random.uniform(-math.pi/4, math.pi/4)
-        # Ensure ball goes towards player who didn't score
-        direction = 1 if self.ball_vx < 0 else -1
-        self.ball_vx = self.ball_speed * math.cos(angle) * direction
-        self.ball_vy = self.ball_speed * math.sin(angle)
-
-    def start(self):
-        """Start the game loop"""
-        if self.is_running:
-            return False
-        
-        self.is_running = True
-        self.game_start_time = datetime.now()
-        self.game_thread = threading.Thread(target=self.game_loop)
-        self.game_thread.daemon = True
-        self.game_thread.start()
-        
-        logger.info(f"Game started: room={self.room_id}")
-        return True
-
-    def stop(self):
-        """Stop the game loop"""
-        self.is_running = False
-        if self.game_thread:
-            self.game_thread = None
-        logger.info(f"Game stopped: room={self.room_id}")
-
-    def game_loop(self):
-        """Main game loop"""
-        self.last_frame_time = time.time()
-        
-        while self.is_running:
-            current_time = time.time()
-            delta_time = current_time - self.last_frame_time
-            
-            # Only update if enough time has passed for next frame
-            if delta_time >= self.frame_duration:
-                self.update(delta_time)
-                self.last_frame_time = current_time
-            else:
-                # Sleep a bit to avoid consuming too much CPU
-                time.sleep(0.001)
-
-    def update(self, delta_time):
-        """Update game state for one frame"""
-        with self.lock:
-            # Apply delta time factor for smooth movement regardless of frame rate
-            delta_factor = delta_time / self.frame_duration
-            
-            # Move ball
-            self.ball_x += self.ball_vx * delta_factor
-            self.ball_y += self.ball_vy * delta_factor
-            
-            # Ball collision with top and bottom walls
-            if self.ball_y - self.ball_radius < 0 or self.ball_y + self.ball_radius > self.height:
-                self.ball_vy = -self.ball_vy
-                # Ensure ball stays in bounds
-                if self.ball_y - self.ball_radius < 0:
-                    self.ball_y = self.ball_radius
-                else:
-                    self.ball_y = self.height - self.ball_radius
-            
-            # Check for scoring (ball off left/right edge)
-            if self.ball_x - self.ball_radius < 0:
-                # Right player scores
-                self.right_score += 1
-                self.check_game_over()
-                self.reset_ball()
-            elif self.ball_x + self.ball_radius > self.width:
-                # Left player scores
-                self.left_score += 1
-                self.check_game_over()
-                self.reset_ball()
-            
-            # Check for paddle collisions
-            self.check_paddle_collisions()
-
-    def check_paddle_collisions(self):
-        """Check and handle ball collisions with paddles"""
-        # Left paddle collision
-        if (self.ball_x - self.ball_radius < self.paddle_width and 
-            self.ball_y > self.left_paddle_y and 
-            self.ball_y < self.left_paddle_y + self.paddle_height):
-            
-            # Calculate hit position relative to paddle center (-1 to 1)
-            hit_pos = (self.ball_y - (self.left_paddle_y + self.paddle_height/2)) / (self.paddle_height/2)
-            
-            # Calculate bounce angle (maximum ±75 degrees)
-            bounce_angle = hit_pos * (math.pi/4)  # π/4 radians = 45 degrees
-            
-            # Increase ball speed
-            self.ball_speed += self.speed_increment
-            
-            # Set new velocity
-            self.ball_vx = abs(self.ball_speed * math.cos(bounce_angle))
-            self.ball_vy = self.ball_speed * math.sin(bounce_angle)
-            
-            # Move ball outside paddle to prevent multiple collisions
-            self.ball_x = self.paddle_width + self.ball_radius
-        
-        # Right paddle collision
-        elif (self.ball_x + self.ball_radius > self.width - self.paddle_width and 
-              self.ball_y > self.right_paddle_y and 
-              self.ball_y < self.right_paddle_y + self.paddle_height):
-            
-            # Calculate hit position relative to paddle center (-1 to 1)
-            hit_pos = (self.ball_y - (self.right_paddle_y + self.paddle_height/2)) / (self.paddle_height/2)
-            
-            # Calculate bounce angle (maximum ±75 degrees)
-            bounce_angle = hit_pos * (math.pi/4)  # π/4 radians = 45 degrees
-            
-            # Increase ball speed
-            self.ball_speed += self.speed_increment
-            
-            # Set new velocity
-            self.ball_vx = -abs(self.ball_speed * math.cos(bounce_angle))
-            self.ball_vy = self.ball_speed * math.sin(bounce_angle)
-            
-            # Move ball outside paddle to prevent multiple collisions
-            self.ball_x = self.width - self.paddle_width - self.ball_radius
-
-    def check_game_over(self):
-        """Check if the game is over"""
-        if self.left_score >= self.target_rounds / 2:
-            self.winner = "left"
-            self.is_running = False
-            if self.on_game_over:
-                self.on_game_over(self)
-        elif self.right_score >= self.target_rounds / 2:
-            self.winner = "right"
-            self.is_running = False
-            if self.on_game_over:
-                self.on_game_over(self)
-
-    def get_state(self):
-        """Get the current game state as a dict"""
-        with self.lock:
-            return {
-                "ball": {
-                    "x": self.ball_x,
-                    "y": self.ball_y,
-                    "radius": self.ball_radius
-                },
-                "paddles": {
-                    "left": {
-                        "x": 0,  # Left paddle is at x=0
-                        "y": self.left_paddle_y,
-                        "width": self.paddle_width,
-                        "height": self.paddle_height
-                    },
-                    "right": {
-                        "x": self.width - self.paddle_width,  # Right paddle is at the right edge
-                        "y": self.right_paddle_y,
-                        "width": self.paddle_width,
-                        "height": self.paddle_height
-                    }
-                },
-                "score": {
-                    "left": self.left_score,
-                    "right": self.right_score
-                },
-                "dimensions": {
-                    "width": self.width,
-                    "height": self.height
-                }
-            }
 
 
 class GameManager:
@@ -816,6 +685,17 @@ class PongConsumer(AsyncWebsocketConsumer):
                 if self.channel_name in tournament_players:
                     await self.handle_tournament_game_over(self.channel_name)
             
+            # Tournament game over (specific for tournament matches)
+            elif msg_type == "tournament_game_over":
+                # Handle tournament-specific game over
+                if self.channel_name in tournament_players:
+                    winner_nickname = data.get("winner")
+                    score = data.get("score", 0)
+                    
+                    # Only process if there's a valid winner
+                    if winner_nickname:
+                        await self.handle_tournament_game_over(self.channel_name)
+            
             # Tournament commands
             elif msg_type == "create_tournament":
                 await self.handle_create_tournament(data)
@@ -874,35 +754,10 @@ class PongConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error processing message: {e}")
 
-    # Tournament-related methods
+    #----------------
+    # Tournament Methods
+    #----------------
     
-
-    
-    
-
-    async def broadcast_waiting_list(self):
-        """Broadcast waiting list to all clients in lobby"""
-        waiting_list = [{"nickname": p["nickname"], "rounds": p["rounds"]} for p in waiting_players]
-        logger.debug(f"Broadcasting waiting list: {len(waiting_list)} players")
-        
-        try:
-            await self.channel_layer.group_send("lobby", {
-                "type": "waiting_list_update",
-                "waiting_list": waiting_list
-            })
-        except Exception as e:
-            logger.error(f"Error broadcasting waiting list: {e}")
-
-    async def waiting_list_update(self, event):
-        """Send waiting list update to connected client"""
-        waiting_list = event.get("waiting_list", [])
-        logger.debug(f"Sending waiting list update: {len(waiting_list)} players")
-        
-        await self.send(text_data=json.dumps({
-            "type": "waiting_list",
-            "waiting_list": waiting_list
-        }))
-        
     async def handle_create_tournament(self, data):
         """Handle tournament creation request"""
         global active_tournaments, tournament_players
@@ -910,12 +765,21 @@ class PongConsumer(AsyncWebsocketConsumer):
         nickname = data.get("nickname")
         tournament_name = data.get("name", f"{nickname}'s Tournament")
         rounds = data.get("rounds", 3)
+        size = data.get("size", 8)
         
-        logger.info(f"Creating tournament: {tournament_name} by {nickname} with {rounds} rounds")
+        # Validate tournament size
+        if size not in [4, 6, 8]:
+            await self.send(text_data=json.dumps({
+                "type": "tournament_error",
+                "message": "Tournament size must be 4, 6, or 8 players"
+            }))
+            return
+            
+        logger.info(f"Creating tournament: {tournament_name} by {nickname} with {size} players")
         
         # Create new tournament
         tournament_id = str(uuid.uuid4())
-        tournament = Tournament(tournament_id, self.channel_name, tournament_name)
+        tournament = Tournament(tournament_id, self.channel_name, tournament_name, size)
         tournament.rounds = rounds
         
         # Add creator as first player
@@ -933,6 +797,9 @@ class PongConsumer(AsyncWebsocketConsumer):
         
         # Broadcast updated tournament list
         await self.broadcast_tournament_list()
+        
+        # Record tournament metrics
+        TOURNAMENT_CREATED.inc()
 
     async def handle_join_tournament(self, data):
         """Handle tournament join request"""
@@ -972,6 +839,9 @@ class PongConsumer(AsyncWebsocketConsumer):
         tournament_players[self.channel_name] = tournament_id
         
         logger.info(f"Player {nickname} joined tournament {tournament_id}")
+        
+        # Update tournament metrics
+        TOURNAMENT_PLAYERS.observe(len(tournament.players))
         
         # Send tournament state to the new player
         await self.send(text_data=json.dumps({
@@ -1023,12 +893,14 @@ class PongConsumer(AsyncWebsocketConsumer):
         # Start the tournament
         if not tournament.start_tournament():
             # Check specific error conditions
-            if len(tournament.players) < 2:
-                message = "Cannot start: Need at least 2 players"
-            elif len(tournament.players) % 2 != 0:
+            player_count = len(tournament.players)
+            
+            if player_count < 4:
+                message = "Cannot start: Need at least 4 players"
+            elif player_count not in [4, 6, 8]:
+                message = "Cannot start: Tournament requires 4, 6, or 8 players"
+            elif player_count % 2 != 0:
                 message = "Cannot start: Need an even number of players"
-            elif len(tournament.players) > 10:
-                message = "Cannot start: Maximum 10 players allowed"
             else:
                 message = "Cannot start tournament"
             
@@ -1159,63 +1031,115 @@ class PongConsumer(AsyncWebsocketConsumer):
         logger.info(f"Tournament match completed in tournament {tournament_id}")
         
         # Record match result
-        if tournament.record_match_result(winner_channel):
-            logger.info(f"Match result recorded, winner: {winner_channel}")
+        result = tournament.record_match_result(winner_channel)
+        if not result:
+            return False
             
-            # Notify all tournament players of the update
+        logger.info(f"Match result recorded, winner: {result['winner']}")
+        
+        # Send result notifications
+        
+        # Notify winner
+        await self.channel_layer.send(
+            result["winner_channel"],
+            {
+                "type": "tournament_match_result",
+                "won": True,
+                "opponent": result["loser"],
+                "tournament_complete": result["tournament_complete"]
+            }
+        )
+        
+        # Notify loser - show tournament elimination
+        await self.channel_layer.send(
+            result["loser_channel"],
+            {
+                "type": "tournament_eliminated",
+                "winner": result["winner"]
+            }
+        )
+        
+        # If tournament is complete, notify all players
+        if result["tournament_complete"]:
+            # Get all players in the tournament
             for player in tournament.players:
-                try:
+                # Skip winner (already notified)
+                if player["channel"] == result["winner_channel"]:
+                    # Send tournament victory notification
                     await self.channel_layer.send(
                         player["channel"],
                         {
-                            "type": "tournament_update",
-                            "tournament": tournament.get_state()
+                            "type": "tournament_victory"
                         }
                     )
-                except Exception as e:
-                    logger.error(f"Error sending tournament update: {e}")
-            
-            # If there's a next match, start it
-            if tournament.current_match:
-                await self.start_tournament_match(tournament, tournament.current_match)
-            else:
-                logger.info(f"Tournament {tournament_id} completed!")
+                    continue
+                    
+                # Notify everyone else about the winner
+                await self.channel_layer.send(
+                    player["channel"],
+                    {
+                        "type": "tournament_complete",
+                        "winner": result["winner"]
+                    }
+                )
+        
+        # Notify all tournament players of the update
+        for player in tournament.players:
+            try:
+                await self.channel_layer.send(
+                    player["channel"],
+                    {
+                        "type": "tournament_update",
+                        "tournament": tournament.get_state()
+                    }
+                )
+            except Exception as e:
+                logger.error(f"Error sending tournament update: {e}")
+        
+        # If there's a next match, start it
+        if tournament.current_match:
+            await self.start_tournament_match(tournament, tournament.current_match)
         
         return True
 
     async def start_tournament_match(self, tournament, match):
         """Start a match within a tournament"""
-        player1 = match["player1"]
-        player2 = match["player2"]
+        player1_channel = match["player1_channel"]
+        player2_channel = match["player2_channel"]
+        player1_nickname = match["player1"]
+        player2_nickname = match["player2"]
         
-        logger.info(f"Starting tournament match: {player1['nickname']} vs {player2['nickname']}")
+        logger.info(f"Starting tournament match: {player1_nickname} vs {player2_nickname}")
         
         # Create a new game room for this match
         tourney_game_room = "tourney_game_" + str(uuid.uuid4())
         
         # Create server-side game
-        game = self.game_manager.create_game(tourney_game_room, target_rounds=tournament.rounds)
+        game = game_manager.create_game(tourney_game_room, target_rounds=tournament.rounds)
         
         # Add players to the game
-        self.game_manager.add_player_to_game(tourney_game_room, player1["channel"], "left")
-        self.game_manager.add_player_to_game(tourney_game_room, player2["channel"], "right")
+        game_manager.add_player_to_game(tourney_game_room, player1_channel, "left")
+        game_manager.add_player_to_game(tourney_game_room, player2_channel, "right")
         
         # Add to channel group
-        await self.channel_layer.group_add(tourney_game_room, player1["channel"])
-        await self.channel_layer.group_add(tourney_game_room, player2["channel"])
+        await self.channel_layer.group_add(tourney_game_room, player1_channel)
+        await self.channel_layer.group_add(tourney_game_room, player2_channel)
         
         # Store room mapping
-        self.active_games[player1["channel"]] = tourney_game_room
-        self.active_games[player2["channel"]] = tourney_game_room
+        active_games[player1_channel] = tourney_game_room
+        active_games[player2_channel] = tourney_game_room
         
         # Start the game
-        self.game_manager.start_game(tourney_game_room)
+        game_manager.start_game(tourney_game_room)
+        
+        # Set up state sync loop for this game
+        asyncio.create_task(self.game_sync_loop(tourney_game_room))
         
         # Start game for both players
-        match_message = f"Tournament match: {player1['nickname']} vs {player2['nickname']}"
+        match_message = f"Tournament match: {player1_nickname} vs {player2_nickname}"
         
         await self.channel_layer.send(
-            player1["channel"],
+            player1_channel,
             {
                 "type": "start_game",
                 "message": match_message,
@@ -1227,7 +1151,7 @@ class PongConsumer(AsyncWebsocketConsumer):
         )
         
         await self.channel_layer.send(
-            player2["channel"],
+            player2_channel,
             {
                 "type": "start_game",
                 "message": match_message,
@@ -1246,6 +1170,7 @@ class PongConsumer(AsyncWebsocketConsumer):
                 "id": t_id,
                 "name": tournament.name,
                 "players": len(tournament.players),
+                "size": tournament.size,
                 "started": tournament.started
             }
             for t_id, tournament in active_tournaments.items()
@@ -1262,7 +1187,58 @@ class PongConsumer(AsyncWebsocketConsumer):
         except Exception as e:
             logger.error(f"Error broadcasting tournament list: {e}")
 
-    # Method to add to PongConsumer class
+    async def broadcast_waiting_list(self):
+        """Broadcast waiting list to all clients in lobby"""
+        waiting_list = [{"nickname": p["nickname"], "rounds": p["rounds"]} for p in waiting_players]
+        logger.debug(f"Broadcasting waiting list: {len(waiting_list)} players")
+        
+        try:
+            await self.channel_layer.group_send("lobby", {
+                "type": "waiting_list_update",
+                "waiting_list": waiting_list
+            })
+        except Exception as e:
+            logger.error(f"Error broadcasting waiting list: {e}")
+
+    async def waiting_list_update(self, event):
+        """Send waiting list update to connected client"""
+        waiting_list = event.get("waiting_list", [])
+        logger.debug(f"Sending waiting list update: {len(waiting_list)} players")
+        
+        await self.send(text_data=json.dumps({
+            "type": "waiting_list",
+            "waiting_list": waiting_list
+        }))
+    
+    async def tournament_match_result(self, event):
+        """Send tournament match result to client"""
+        await self.send(text_data=json.dumps({
+            "type": "tournament_match_result",
+            "won": event.get("won", False),
+            "opponent": event.get("opponent"),
+            "tournament_complete": event.get("tournament_complete", False)
+        }))
+    
+    async def tournament_eliminated(self, event):
+        """Send tournament elimination notification to client"""
+        await self.send(text_data=json.dumps({
+            "type": "tournament_eliminated",
+            "winner": event.get("winner")
+        }))
+    
+    async def tournament_victory(self, event):
+        """Send tournament victory notification to client"""
+        await self.send(text_data=json.dumps({
+            "type": "tournament_victory"
+        }))
+    
+    async def tournament_complete(self, event):
+        """Send tournament completion notification to client"""
+        await self.send(text_data=json.dumps({
+            "type": "tournament_complete",
+            "winner": event.get("winner")
+        }))
+    
     async def tournament_list_update(self, event):
         """Send updated tournament list to client"""
         tournaments = event.get("tournaments", [])

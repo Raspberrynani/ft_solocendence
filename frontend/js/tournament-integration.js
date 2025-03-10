@@ -1,6 +1,6 @@
 /**
  * Tournament Integration Module
- * Integrates the tournament system with the main application
+ * Connects the tournament system with the main application
  */
 (function() {
     // Wait for document to be ready
@@ -10,266 +10,284 @@
      * Initialize tournament integration
      */
     function initTournamentIntegration() {
-      console.log("Tournament Integration: Initializing...");
-      
-      // Wait for App and required modules to be available
-      if (!window.App || !window.TournamentManager || !window.TournamentWebSocketConnector) {
-        console.log("Tournament Integration: Waiting for required modules...");
-        setTimeout(initTournamentIntegration, 100);
-        return;
-      }
-      
-      // Modify the main menu to add tournament option
-      setupGameModeSelection();
-      
-      // Connect Tournament system with game over handling
-      enhanceGameOverHandler();
-      
-      // Add style for match alert animation
-      addTournamentStyles();
-      
-      console.log("Tournament Integration: Initialized successfully");
-    }
-    
-    /**
-     * Set up game mode selection to handle tournament mode
-     */
-    function setupGameModeSelection() {
-      // Update the start game button click handler to handle tournament mode
-      const startGameBtn = document.getElementById("start-game");
-      if (!startGameBtn) return;
-      
-      const originalClickHandler = startGameBtn.onclick;
-      
-      startGameBtn.onclick = function(e) {
-        // Get current game mode
-        const currentMode = getCurrentGameMode();
+        console.log("Tournament Integration: Initializing...");
         
-        // If tournament mode is selected
-        if (currentMode === "tournament") {
-          e.preventDefault();
-          
-          // Get nickname
-          const nickname = document.getElementById("nickname").value.trim();
-          
-          // Validate nickname
-          if (!nickname) {
-            showError("Please enter a nickname to participate in a tournament");
+        // Wait for App and required modules to be available
+        if (!window.App || !window.TournamentManager || !window.TournamentConnector) {
+            console.log("Tournament Integration: Waiting for required modules...");
+            setTimeout(initTournamentIntegration, 100);
             return;
-          }
-          
-          // Initialize Tournament Manager if not already initialized
-          if (window.TournamentManager) {
-            TournamentManager.init({
-              username: nickname,
-              websocket: window.WebSocketManager
-            });
-          }
-          
-          // Initialize WebSocket Connector
-          if (window.TournamentWebSocketConnector) {
-            TournamentWebSocketConnector.init({
-              webSocket: window.WebSocketManager,
-              tournamentManager: window.TournamentManager
-            });
-          }
-          
-          // Navigate to tournament page
-          if (window.UIManager) {
-            UIManager.navigateTo("tournament-page");
-          }
-        } else if (typeof originalClickHandler === "function") {
-          // For other modes, use original handler
-          originalClickHandler.call(this, e);
         }
-      };
+        
+        // Set up tournament page navigation
+        setupTournamentNavigation();
+        
+        // Enhance game over handling for tournaments
+        enhanceGameOverHandler();
+        
+        // Add custom styles for tournament notifications
+        addTournamentStyles();
+        
+        console.log("Tournament Integration: Initialized successfully");
     }
     
     /**
-     * Enhance the game over handler to support tournaments
+     * Set up tournament page navigation
      */
-    function enhanceGameOverHandler() {
-      // Store original game over handler if available
-      if (!window.App || !App.handleGameOver) return;
-      
-      const originalGameOver = App.handleGameOver;
-      
-      // Override with enhanced version
-      App.handleGameOver = function(score, winner) {
-        console.log(`Enhanced handleGameOver called: score=${score}, winner=${winner}`);
+    function setupTournamentNavigation() {
+        // Get tournament mode option from main menu
+        const tournamentOption = getGameModeOption('tournament');
+        if (!tournamentOption) return;
         
-        // Check if this is a tournament game
-        if (App.state && App.state.game && App.state.game.isTournament) {
-          console.log("Tournament game over detected");
-          
-          // Determine if current player won
-          const playerSide = App.state.game.playerSide || "left";
-          const playerWon = (playerSide === "left" && winner === "left") || 
-                           (playerSide === "right" && winner === "right");
-          
-          console.log(`Tournament result: playerSide=${playerSide}, winner=${winner}, playerWon=${playerWon}`);
-          
-          // Send game over to WebSocket to notify tournament system
-          if (App.modules && App.modules.websocket) {
-            App.modules.websocket.sendGameOver(score);
-          }
-          
-          // Stop the game
-          const isMultiplayer = App.state?.game?.isMultiplayer || false;
-          if (isMultiplayer && window.ServerPong) {
-            ServerPong.stop();
-          } else if (window.PongGame) {
-            PongGame.stop();
-          }
-          
-          // Exit fullscreen if needed
-          if (typeof App.exitFullscreen === "function") {
-            App.exitFullscreen();
-          }
-          
-          // After short delay, navigate based on result
-          setTimeout(() => {
-            // Check if tournament is complete and player won
-            const tournamentComplete = window.TournamentManager && TournamentManager.isTournamentComplete();
+        // Get the main start game button
+        const startGameBtn = document.getElementById("start-game");
+        if (!startGameBtn) return;
+        
+        // Store original click handler
+        const originalClickHandler = startGameBtn.onclick;
+        
+        // Override click handler to handle tournament mode
+        startGameBtn.onclick = function(e) {
+            // Get current game mode
+            const currentMode = getCurrentGameMode();
             
-            if (playerWon) {
-              if (tournamentComplete) {
-                // Show tournament victory screen
-                showTournamentVictory();
-              } else {
-                // Navigate back to tournament page
-                if (window.UIManager) {
-                  UIManager.navigateTo("tournament-page");
+            // If tournament mode is selected
+            if (currentMode === "tournament") {
+                e.preventDefault();
+                
+                // Get player nickname
+                const nicknameInput = document.getElementById("nickname");
+                if (!nicknameInput || !nicknameInput.value.trim()) {
+                    showError("Please enter a nickname to join a tournament");
+                    return;
                 }
                 
-                // Show success message
-                showSuccess("Match won! Waiting for next match...");
-              }
-            } else {
-              // Player lost - show message
-              showSuccess("Match lost. Tournament complete for you.");
-              
-              // Reset tournament state
-              if (window.TournamentManager) {
-                TournamentManager.resetTournamentState();
-              }
-              
-              // Navigate back to main menu
-              if (window.UIManager) {
-                UIManager.navigateTo("game-page");
-              }
+                const nickname = nicknameInput.value.trim();
+                
+                // Store nickname for later use
+                try {
+                    localStorage.setItem('currentNickname', nickname);
+                } catch (e) {
+                    console.warn("Failed to store nickname in localStorage:", e);
+                }
+                
+                // Initialize tournament system
+                initTournamentSystem(nickname);
+                
+                // Navigate to tournament page
+                navigateToPage("tournament-page");
+            } else if (typeof originalClickHandler === "function") {
+                // For other modes, use original handler
+                originalClickHandler.call(this, e);
             }
-          }, 500);
-          
-          return; // Skip original handler
-        }
-        
-        // Not a tournament game, call original handler
-        originalGameOver.apply(App, [score, winner]);
-      };
+        };
     }
     
     /**
-     * Show tournament victory screen
+     * Initialize the tournament system
+     * @param {string} nickname Player nickname
      */
-    function showTournamentVictory() {
-      if (!window.TournamentManager) return;
-      
-      const tournamentStats = {
-        matchesPlayed: 0,
-        totalPlayers: 0
-      };
-      
-      // Calculate stats if tournament data is available
-      if (TournamentManager.getCurrentTournament) {
-        const tournament = TournamentManager.getCurrentTournament();
-        if (tournament) {
-          tournamentStats.matchesPlayed = (tournament.completed_matches || []).length;
-          tournamentStats.totalPlayers = (tournament.players || []).length;
-        }
-      }
-      
-      // Get current player's nickname
-      const currentUsername = document.getElementById("nickname")?.value?.trim() || "You";
-      
-      // Show tournament result
-      TournamentManager.showTournamentResult(currentUsername, tournamentStats);
-      
-      // Reset tournament state after a delay
-      setTimeout(() => {
-        TournamentManager.resetTournamentState();
+    function initTournamentSystem(nickname) {
+        console.log("Initializing tournament system for player:", nickname);
         
-        // Navigate back to main menu
-        if (window.UIManager) {
-          UIManager.navigateTo("game-page");
+        // Initialize Tournament Manager
+        if (window.TournamentManager && window.TournamentManager.init) {
+            TournamentManager.init({
+                username: nickname,
+                websocket: window.WebSocketManager
+            });
         }
-      }, 5000);
+        
+        // Initialize Tournament Connector
+        if (window.TournamentConnector && window.TournamentConnector.init) {
+            TournamentConnector.init({
+                webSocket: window.WebSocketManager,
+                tournamentManager: window.TournamentManager
+            });
+        }
+    }
+    
+    /**
+     * Enhance game over handler to support tournaments
+     */
+    function enhanceGameOverHandler() {
+        // Get App module
+        if (!window.App) return;
+        
+        // Get the main game state
+        const appState = App.state;
+        if (!appState || !appState.game) return;
+        
+        // Store original handleGameOver function if it exists
+        const originalHandleGameOver = App.handleGameOver;
+        if (typeof originalHandleGameOver !== 'function') return;
+        
+        // Replace with enhanced version
+        App.handleGameOver = function(score, winner) {
+            console.log(`Enhanced game over handler: score=${score}, winner=${winner}`);
+            
+            // Check if this is a tournament game
+            if (appState.game.isTournament) {
+                console.log("Tournament game detected");
+                
+                // Determine if current player won
+                const playerSide = appState.game.playerSide || 'left';
+                const playerWon = (playerSide === 'left' && winner === 'left') || 
+                                 (playerSide === 'right' && winner === 'right');
+                
+                console.log(`Tournament game result: playerSide=${playerSide}, winner=${winner}, playerWon=${playerWon}`);
+                
+                // Send game over notification to server
+                if (window.WebSocketManager && WebSocketManager.send) {
+                    WebSocketManager.send({
+                        type: "tournament_game_over",
+                        score: score,
+                        winner: playerWon ? appState.user.nickname : null
+                    });
+                }
+                
+                // Stop the appropriate game engine
+                stopGameEngine(appState.game.isMultiplayer);
+                
+                // Exit fullscreen if active
+                exitFullscreen();
+                
+                // Return to tournament page after a short delay
+                setTimeout(() => {
+                    navigateToPage("tournament-page");
+                }, 1000);
+                
+                return; // Skip original handler
+            }
+            
+            // Not a tournament game, call original handler
+            originalHandleGameOver.call(App, score, winner);
+        };
+    }
+    
+    /**
+     * Stop the active game engine
+     * @param {boolean} isMultiplayer Whether multiplayer game engine is active
+     */
+    function stopGameEngine(isMultiplayer) {
+        if (isMultiplayer) {
+            // Stop server-side game renderer
+            if (window.ServerPong && typeof ServerPong.stop === 'function') {
+                ServerPong.stop();
+            }
+        } else {
+            // Stop client-side game
+            if (window.PongGame && typeof PongGame.stop === 'function') {
+                PongGame.stop();
+            }
+        }
+    }
+    
+    /**
+     * Exit fullscreen mode
+     */
+    function exitFullscreen() {
+        if (document.exitFullscreen) {
+            document.exitFullscreen().catch(err => {
+                console.warn("Error exiting fullscreen:", err);
+            });
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        }
     }
     
     /**
      * Add tournament-specific styles
      */
     function addTournamentStyles() {
-      if (document.getElementById("tournament-integration-styles")) return;
-      
-      const style = document.createElement("style");
-      style.id = "tournament-integration-styles";
-      style.textContent = `
-        @keyframes matchAlert {
-          0%, 100% { background-color: rgba(0, 0, 0, 0.8); }
-          50% { background-color: rgba(255, 153, 0, 0.2); }
-        }
+        // Check if styles are already added
+        if (document.getElementById('tournament-integration-styles')) return;
         
-        .match-alert {
-          animation: matchAlert 1s ease-in-out 3;
-        }
-      `;
-      
-      document.head.appendChild(style);
+        // Create style element
+        const style = document.createElement('style');
+        style.id = 'tournament-integration-styles';
+        style.textContent = `
+            @keyframes matchAlert {
+                0%, 100% { background-color: rgba(0, 0, 0, 0.8); }
+                50% { background-color: rgba(255, 153, 0, 0.2); }
+            }
+            
+            .match-alert {
+                animation: matchAlert 1s ease-in-out 3;
+            }
+            
+            .tournament-badge {
+                position: absolute;
+                top: 10px;
+                right: 10px;
+                background-color: rgba(255, 193, 7, 0.8);
+                color: black;
+                padding: 5px 10px;
+                border-radius: 4px;
+                font-size: 12px;
+                font-weight: bold;
+                z-index: 100;
+            }
+        `;
+        
+        // Add to document head
+        document.head.appendChild(style);
     }
     
     /**
-     * Get the current game mode from App state
+     * Get the game mode option by ID
+     * @param {string} modeId Game mode ID to find
+     * @returns {Object|null} Game mode object or null if not found
+     */
+    function getGameModeOption(modeId) {
+        if (!window.App || !App.state || !App.state.gameModes) return null;
+        
+        return App.state.gameModes.find(mode => mode.id === modeId);
+    }
+    
+    /**
+     * Get current game mode from App state
      * @returns {string} Current game mode ID
      */
     function getCurrentGameMode() {
-      if (window.App && App.state && App.state.ui) {
+        if (!window.App || !App.state || !App.state.ui) return 'classic';
+        
         const index = App.state.ui.currentGameModeIndex;
         const modes = App.state.gameModes;
         
         if (modes && modes[index]) {
-          return modes[index].id;
+            return modes[index].id;
         }
-      }
-      
-      return "classic"; // Default to classic mode
+        
+        return 'classic';
     }
     
     /**
-     * Show an error message
+     * Navigate to a page using UIManager
+     * @param {string} pageId ID of page to navigate to
+     */
+    function navigateToPage(pageId) {
+        if (window.UIManager && typeof UIManager.navigateTo === 'function') {
+            UIManager.navigateTo(pageId);
+        }
+    }
+    
+    /**
+     * Show error message
      * @param {string} message Error message to display
      */
     function showError(message) {
-      if (window.Utils && Utils.showAlert) {
-        Utils.showAlert(message, "warning");
-      } else if (window.App && App.showError) {
-        App.showError(message, "warning");
-      } else {
-        alert(message);
-      }
+        if (window.Utils && Utils.showAlert) {
+            Utils.showAlert(message, "warning");
+        } else if (window.App && App.showError) {
+            App.showError(message, "warning");
+        } else {
+            console.error(message);
+            alert(message);
+        }
     }
-    
-    /**
-     * Show a success message
-     * @param {string} message Success message to display
-     */
-    function showSuccess(message) {
-      if (window.Utils && Utils.showToast) {
-        Utils.showToast(message, "success");
-      } else if (window.App && App.showToast) {
-        App.showToast(message, "success");
-      } else {
-        console.log(message);
-      }
-    }
-  })();
+})();

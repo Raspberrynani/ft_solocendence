@@ -2,7 +2,7 @@
  * Tournament WebSocket Connector
  * Connects the Tournament Manager to the WebSocket server
  */
-const TournamentWebSocketConnector = (function() {
+const TournamentConnector = (function() {
     // Private variables
     let webSocket = null;
     let tournamentManager = null;
@@ -12,161 +12,141 @@ const TournamentWebSocketConnector = (function() {
      * @param {Object} options Configuration options
      */
     function init(options = {}) {
-      console.log("TournamentWebSocketConnector: Initializing...");
-      
-      // Store main WebSocket instance
-      webSocket = options.webSocket || window.WebSocketManager;
-      if (!webSocket) {
-        console.error("TournamentWebSocketConnector: WebSocket instance is required");
-        return false;
-      }
-      
-      // Store Tournament Manager instance
-      tournamentManager = options.tournamentManager || window.TournamentManager;
-      if (!tournamentManager) {
-        console.error("TournamentWebSocketConnector: Tournament Manager instance is required");
-        return false;
-      }
-      
-      // Set up message handlers
-      setupMessageHandlers();
-      
-      console.log("TournamentWebSocketConnector: Initialized successfully");
-      return true;
-    }
-    
-    /**
-     * Set up WebSocket message handlers
-     */
-    function setupMessageHandlers() {
-      // Store original WebSocket message handler if available
-      const originalMessageHandler = webSocket.onmessage || function() {};
-      
-      // Override WebSocket message handler with our own
-      webSocket.onmessage = function(event) {
-        // Call original handler first
-        originalMessageHandler(event);
+        console.log("TournamentConnector: Initializing...");
         
-        // Handle tournament-specific messages
-        try {
-          const data = JSON.parse(event.data);
-          
-          switch (data.type) {
-            case "tournament_list":
-              handleTournamentList(data.tournaments);
-              break;
-            case "tournament_created":
-              handleTournamentCreated(data.tournament);
-              break;
-            case "tournament_joined":
-              handleTournamentJoined(data.tournament);
-              break;
-            case "tournament_update":
-              handleTournamentUpdate(data.tournament);
-              break;
-            case "tournament_left":
-              handleTournamentLeft(data.message);
-              break;
-            case "tournament_error":
-              handleTournamentError(data.message);
-              break;
-          }
-        } catch (error) {
-          console.error("Error processing WebSocket message:", error);
+        // Store WebSocket instance
+        webSocket = options.webSocket || window.WebSocketManager;
+        if (!webSocket) {
+            console.error("TournamentConnector: WebSocket instance is required");
+            return false;
         }
-      };
+        
+        // Store Tournament Manager instance
+        tournamentManager = options.tournamentManager || window.TournamentManager;
+        if (!tournamentManager) {
+            console.error("TournamentConnector: Tournament Manager instance is required");
+            return false;
+        }
+        
+        // Register WebSocket message handlers
+        registerMessageHandlers();
+        
+        console.log("TournamentConnector: Initialized successfully");
+        return true;
     }
     
     /**
-     * Send a WebSocket message
-     * @param {Object} data Message data to send
+     * Register WebSocket message handlers for tournament events
+     */
+    function registerMessageHandlers() {
+        if (!webSocket || !tournamentManager) return;
+        
+        // Define message handlers
+        const messageHandlers = {
+            // Tournament listings
+            tournament_list: (data) => {
+                tournamentManager.updateTournamentsList(data.tournaments);
+            },
+            
+            // Tournament updates
+            tournament_created: (data) => {
+                tournamentManager.handleTournamentCreated(data.tournament);
+            },
+            tournament_joined: (data) => {
+                tournamentManager.handleTournamentJoined(data.tournament);
+            },
+            tournament_update: (data) => {
+                tournamentManager.handleTournamentUpdate(data.tournament);
+            },
+            tournament_left: (data) => {
+                tournamentManager.handleTournamentLeft(data.message);
+            },
+            tournament_error: (data) => {
+                tournamentManager.handleTournamentError(data.message);
+            },
+            
+            // Tournament results
+            tournament_eliminated: (data) => {
+                tournamentManager.showTournamentElimination(data.winner);
+            },
+            tournament_victory: (data) => {
+                tournamentManager.showTournamentVictory();
+            }
+        };
+        
+        // Register a single message handler that delegates to the appropriate function
+        webSocket.onTournamentMessage = function(data) {
+            const messageType = data.type;
+            const handler = messageHandlers[messageType];
+            
+            if (handler) {
+                handler(data);
+            } else {
+                console.warn(`Unhandled tournament message type: ${messageType}`);
+            }
+        };
+        
+        // Hook into the WebSocket receive logic to detect tournament messages
+        enhanceWebSocketReceive();
+    }
+    
+    /**
+     * Enhance the WebSocket receive method to detect tournament messages
+     */
+    function enhanceWebSocketReceive() {
+        // Only enhance if not already enhanced
+        if (webSocket._tournamentEnhanced) return;
+        
+        // Store the original receive method
+        const originalReceive = webSocket.receive || function() {};
+        
+        // Replace with enhanced version
+        webSocket.receive = function(message) {
+            try {
+                // Parse the message data
+                const data = JSON.parse(message.data);
+                
+                // Check if it's a tournament-related message
+                if (data && data.type && data.type.startsWith('tournament_')) {
+                    // Handle tournament message
+                    if (webSocket.onTournamentMessage) {
+                        webSocket.onTournamentMessage(data);
+                    }
+                }
+            } catch (error) {
+                console.error('Error processing WebSocket message:', error);
+            }
+            
+            // Call original receive method
+            if (typeof originalReceive === 'function') {
+                originalReceive.call(webSocket, message);
+            }
+        };
+        
+        // Mark as enhanced to prevent multiple enhancements
+        webSocket._tournamentEnhanced = true;
+    }
+    
+    /**
+     * Send a tournament-related message
+     * @param {Object} data Message data
      * @returns {boolean} Success status
      */
-    function send(data) {
-      if (!webSocket || !webSocket.send) {
-        console.error("WebSocket not available for sending");
-        return false;
-      }
-      
-      return webSocket.send(data);
-    }
-    
-    /**
-     * Handle tournament list message
-     * @param {Array} tournaments List of available tournaments
-     */
-    function handleTournamentList(tournaments) {
-        console.log("Received tournament list:", tournaments);
-        // Try both function names for backward compatibility
-        if (tournamentManager) {
-          if (tournamentManager.updateTournamentList) {
-            tournamentManager.updateTournamentList(tournaments);
-          } else if (tournamentManager.updateTournamentsList) {
-            tournamentManager.updateTournamentsList(tournaments);
-          }
+    function sendMessage(data) {
+        if (!webSocket || !webSocket.send) {
+            console.error("Cannot send message: WebSocket not available");
+            return false;
         }
-      }
-    /**
-     * Handle tournament created message
-     * @param {Object} tournament Created tournament data
-     */
-    function handleTournamentCreated(tournament) {
-      console.log("Tournament created:", tournament);
-      if (tournamentManager && tournamentManager.handleTournamentCreated) {
-        tournamentManager.handleTournamentCreated(tournament);
-      }
-    }
-    
-    /**
-     * Handle tournament joined message
-     * @param {Object} tournament Joined tournament data
-     */
-    function handleTournamentJoined(tournament) {
-      console.log("Tournament joined:", tournament);
-      if (tournamentManager && tournamentManager.handleTournamentJoined) {
-        tournamentManager.handleTournamentJoined(tournament);
-      }
-    }
-    
-    /**
-     * Handle tournament update message
-     * @param {Object} tournament Updated tournament data
-     */
-    function handleTournamentUpdate(tournament) {
-      console.log("Tournament updated:", tournament);
-      if (tournamentManager && tournamentManager.handleTournamentUpdate) {
-        tournamentManager.handleTournamentUpdate(tournament);
-      }
-    }
-    
-    /**
-     * Handle tournament left message
-     * @param {string} message Notification message
-     */
-    function handleTournamentLeft(message) {
-      console.log("Tournament left:", message);
-      if (tournamentManager && tournamentManager.handleTournamentLeft) {
-        tournamentManager.handleTournamentLeft();
-      }
-    }
-    
-    /**
-     * Handle tournament error message
-     * @param {string} message Error message
-     */
-    function handleTournamentError(message) {
-      console.error("Tournament error:", message);
-      if (tournamentManager && tournamentManager.handleTournamentError) {
-        tournamentManager.handleTournamentError(message);
-      }
+        
+        return webSocket.send(data);
     }
     
     // Public API
     return {
-      init,
-      send
+        init,
+        send: sendMessage
     };
-  })();
-  
-  // Make available globally
-  window.TournamentWebSocketConnector = TournamentWebSocketConnector;
+})();
+
+// Make available globally
+window.TournamentConnector = TournamentConnector;
