@@ -1,3 +1,4 @@
+![Solocendence Icon](./frontend/images/logo.png?raw=true)
 # Solocendence
 
 A modern take on the classic Pong game, featuring real-time multiplayer, tournaments, and more. This project is a solo implementation of the 42 School's final common core project "ft_transcendence," which is typically done by a team of 3-5 students.
@@ -65,3 +66,6 @@ Try typing certain codes or key combinations to discover hidden features!
 ## License
 
 This project is licensed under the GNU AGPL - see the LICENSE file for details.
+
+## MODULE SELECTED
+![Image Containing Modules](https://gcdnb.pbrd.co/images/nRpmwWOsBPxm.png?o=1)
