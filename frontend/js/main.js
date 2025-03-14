@@ -823,9 +823,6 @@ const App = (function() {
             // Exit fullscreen if active
             exitFullscreen();
             
-            // The tournament specific handling is delegated to the tournament-integration.js script
-            // via the WebSocket handlers. We don't need to handle it here anymore.
-            
             // For non-tournament games, record the result
             if (!state.game.isTournament) {
                 // Record game result with a winning score value
@@ -836,6 +833,50 @@ const App = (function() {
                 const playerWon = (playerSide === 'left' && winner === 'left') || 
                                 (playerSide === 'right' && winner === 'right');
                 
+                // Get opponent name (use a default if not available)
+                const opponentName = state.game.opponent || (playerSide === 'left' ? 'Right Player' : 'Left Player');
+                
+                // Determine actual scores
+                let playerScore = 0;
+                let opponentScore = 0;
+                
+                if (window.ServerPong && ServerPong.getState()) {
+                    const gameState = ServerPong.getState();
+                    if (gameState.score) {
+                        if (playerSide === 'left') {
+                            playerScore = gameState.score.left || 0;
+                            opponentScore = gameState.score.right || 0;
+                        } else {
+                            playerScore = gameState.score.right || 0;
+                            opponentScore = gameState.score.left || 0;
+                        }
+                    }
+                } else if (window.PongGame && PongGame.getState) {
+                    // For AI games, try to get scores from PongGame
+                    try {
+                        const gameState = PongGame.getState();
+                        playerScore = gameState.rounds.current || 0;
+                        opponentScore = winningScore - playerScore;
+                    } catch (e) {
+                        console.warn('Could not get accurate scores from game state');
+                        // Use fallback values
+                        playerScore = playerWon ? winningScore : Math.max(0, score - 1);
+                        opponentScore = playerWon ? Math.max(0, score - 1) : winningScore;
+                    }
+                }
+                
+                // Record match in match history
+                if (window.MatchHistoryManager) {
+                    MatchHistoryManager.addMatch({
+                        opponent: state.game.isMultiplayer ? opponentName : 'AI',
+                        won: playerWon,
+                        score: playerScore,
+                        opponentScore: opponentScore,
+                        totalRounds: state.game.rounds.target,
+                        gameMode: state.game.isMultiplayer ? 'classic' : (state.game.mode || 'ai')
+                    });
+                }
+                            
                 recordGameResult(
                     state.user.nickname,
                     state.user.token,
@@ -1509,6 +1550,48 @@ async function endPongGame() {
                 console.error('Leaderboard element not found');
                 return;
             }
+    
+            // Check if match history container exists, if not, create it
+            let matchHistoryContainer = document.getElementById('match-history-container');
+            if (!matchHistoryContainer) {
+                // Create match history section
+                matchHistoryContainer = document.createElement('div');
+                matchHistoryContainer.id = 'match-history-container';
+                matchHistoryContainer.className = 'match-history-container';
+                
+                // Create toggle button
+                const toggleButton = document.createElement('div');
+                toggleButton.className = 'match-history-toggle';
+                toggleButton.innerHTML = '<button class="match-history-button"><i class="fas fa-history"></i> Match History</button>';
+                
+                // Add click handler for toggle
+                toggleButton.querySelector('button').addEventListener('click', function() {
+                    if (matchHistoryContainer.classList.contains('hidden')) {
+                        matchHistoryContainer.classList.remove('hidden');
+                        this.innerHTML = '<i class="fas fa-times"></i> Hide History';
+                    } else {
+                        matchHistoryContainer.classList.add('hidden');
+                        this.innerHTML = '<i class="fas fa-history"></i> Match History';
+                    }
+                });
+                
+                // Get leaderboard container and insert before the leaderboard
+                const leaderboardPage = document.getElementById('leaderboard-page');
+                const leaderboardCard = leaderboardPage.querySelector('.card');
+                
+                if (leaderboardPage && leaderboardCard) {
+                    leaderboardPage.insertBefore(toggleButton, leaderboardCard);
+                    leaderboardPage.insertBefore(matchHistoryContainer, leaderboardCard);
+                    
+                    // Initially hide the match history
+                    matchHistoryContainer.classList.add('hidden');
+                }
+            }
+    
+            // Display match history if the container exists
+            if (window.MatchHistoryManager && matchHistoryContainer) {
+                MatchHistoryManager.displayHistory(matchHistoryContainer, 3);
+            }
             
             showLoading(elements.leaderboard);
             
@@ -2060,6 +2143,35 @@ function exitFullscreen() {
         showError(message, 'warning');
     }
     
+    /**
+     * Record a match to match history
+     * @param {Object} matchData - Match data
+     */
+    function recordMatchHistory(matchData = {}) {
+        if (!window.MatchHistoryManager) {
+        console.warn('MatchHistoryManager not available, match not recorded');
+        return;
+        }
+        
+        const currentGameState = App.state.game;
+        
+        // Default values
+        const defaultData = {
+        opponent: 'Unknown',
+        won: false,
+        score: 0,
+        opponentScore: 0,
+        totalRounds: currentGameState.rounds?.target || 3,
+        gameMode: currentGameState.mode || 'classic'
+        };
+        
+        // Merge with provided data
+        const finalData = { ...defaultData, ...matchData };
+        
+        console.log('Recording match history:', finalData);
+        MatchHistoryManager.addMatch(finalData);
+    }
+
     /**
      * Show a toast notification
      * @param {string} message - Message to display
