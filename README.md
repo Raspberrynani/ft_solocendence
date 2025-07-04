@@ -66,6 +66,3 @@ Try typing certain codes or key combinations to discover hidden features!
 ## License
 
 This project is licensed under the GNU AGPL - see the LICENSE file for details.
-
-## MODULE SELECTED
-![Image Containing Modules](https://gcdnb.pbrd.co/images/nRpmwWOsBPxm.png?o=1)
